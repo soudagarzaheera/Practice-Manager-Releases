@@ -4,14 +4,14 @@
 -- Context: the Approvals screen only ever showed *pending* items (a submitted
 -- timesheet, a "pending" budget_requests row, a "submitted" expense_claims
 -- row). Once decideLine()/decideBudget()/decideClaim() moved a record out of
--- that pending state, it vanished from the screen — the decision was saved
+-- that pending state, it vanished from the screen - the decision was saved
 -- (status did change in the database, nothing was deleted), but there was
 -- nowhere left in the UI that read decided records back out. Separately,
 -- 003_auth_integration.sql's `authenticated_org_access` policy gave every
 -- signed-in member of an organization full read (and write) access to every
--- other member's budget_requests and expense_claims rows, decided or not —
+-- other member's budget_requests and expense_claims rows, decided or not -
 -- so even once a history view existed, an ordinary employee could read
--- another employee's — or another partner's — accepted/rejected requests,
+-- another employee's - or another partner's - accepted/rejected requests,
 -- and who decided them, directly through the anon/publishable client.
 --
 -- This migration:
@@ -23,18 +23,18 @@
 --   2. Replaces the blanket authenticated_org_access policy on
 --      budget_requests, expense_claims and expense_claim_lines with policies
 --      scoped to: the requester's own rows, plus the roles actually
---      authorized to decide them — mirroring CAN.approveBudget(),
+--      authorized to decide them - mirroring CAN.approveBudget(),
 --      CAN.approveClaim() and CAN.payClaim() in index.html exactly, so the
 --      client-side capability matrix and the database policy agree.
 --      *Pending* budget_requests stay organization-wide readable (unchanged)
---      because the "increase requested" flag on the Job codes screen — shown
---      to every role, not just approvers — already depends on seeing that a
+--      because the "increase requested" flag on the Job codes screen - shown
+--      to every role, not just approvers - already depends on seeing that a
 --      request exists; it carries no decision, so there is nothing to
 --      protect there. Only decided (approved/rejected) rows are locked down.
 --   3. timesheet_entries' RLS is intentionally left as-is: the Job codes
 --      screen (visible to every role) and the Time-on-jobs/Reports screens
 --      (visible to seniors and up) already total hours from every employee's
---      entries by design, for job-cost visibility — tightening that table's
+--      entries by design, for job-cost visibility - tightening that table's
 --      RLS would break those existing, unrelated features. The Approvals UI
 --      scopes timesheet decision history in the client with the same
 --      CAN.approveSheet() check it already used for the pending list, which
@@ -59,7 +59,7 @@ BEGIN
 END $$;
 
 -- ---- helper functions ---------------------------------------------------------
--- auth_rank() mirrors the RANK map in index.html exactly — keep both in sync
+-- auth_rank() mirrors the RANK map in index.html exactly - keep both in sync
 -- if a role is ever added or its rank changes.
 CREATE OR REPLACE FUNCTION auth_rank()
 RETURNS INT
@@ -85,7 +85,7 @@ GRANT EXECUTE ON FUNCTION auth_role() TO authenticated;
 DROP POLICY IF EXISTS authenticated_org_access ON budget_requests;
 
 -- Read: the requester's own request at any status, any pending request
--- org-wide (unchanged visibility — see note above), or any request at all
+-- org-wide (unchanged visibility - see note above), or any request at all
 -- once you are ranked to decide budget requests (manager/partner).
 CREATE POLICY budget_requests_select ON budget_requests FOR SELECT TO authenticated
   USING (
@@ -97,7 +97,7 @@ CREATE POLICY budget_requests_select ON budget_requests FOR SELECT TO authentica
 CREATE POLICY budget_requests_insert ON budget_requests FOR INSERT TO authenticated
   WITH CHECK (organization_id = auth_org_id() AND requested_by = auth_profile_id());
 
--- Decide: manager/partner only, and — matching CAN.approveBudget() — never
+-- Decide: manager/partner only, and - matching CAN.approveBudget() - never
 -- your own request unless you are a partner.
 CREATE POLICY budget_requests_update ON budget_requests FOR UPDATE TO authenticated
   USING (
@@ -111,7 +111,7 @@ DROP POLICY IF EXISTS authenticated_org_access ON expense_claims;
 
 -- Read: your own claim at any status; anyone ranked to decide claims
 -- (manager/partner) sees every claim; accounts sees approved/paid claims
--- only — matching CAN.payClaim(), which never decides, only pays.
+-- only - matching CAN.payClaim(), which never decides, only pays.
 CREATE POLICY expense_claims_select ON expense_claims FOR SELECT TO authenticated
   USING (
     organization_id = auth_org_id() AND (

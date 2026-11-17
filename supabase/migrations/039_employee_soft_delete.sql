@@ -7,12 +7,12 @@
 --   * "Delete" in the app was a hard DELETE on profiles. timesheet_entries,
 --     nil_timesheets, attendance_punches, budget_requests, expense_claims,
 --     leaves and employee_salary_history reference profiles ON DELETE RESTRICT,
---     so the delete failed for anyone with history — including everyone added
+--     so the delete failed for anyone with history - including everyone added
 --     with a Monthly CTC (create-employee writes their first salary row). The
 --     only way out was Deactivate, which keeps the row (is_active = false), so
 --     the person stays in the Reactivate list and keeps their code and email.
 --   * uq_org_employee_code UNIQUE (organization_id, employee_code) covers every
---     row, active or not — a deactivated person's code is never free.
+--     row, active or not - a deactivated person's code is never free.
 --   * create-employee rejects an email used by ANY profile of the organization,
 --     and Supabase Auth keeps the old account (profiles.auth_user_id references
 --     auth.users ON DELETE SET NULL; deleting a profile never removes the Auth
@@ -32,7 +32,7 @@
 --      replaces uq_org_employee_code). Deleted rows keep their code and email
 --      so history still shows who did the work.
 --   3. delete_employee(profile): Partner only, same organization, one
---      transaction — marks the profile deleted (inactive, exit date, who/when),
+--      transaction - marks the profile deleted (inactive, exit date, who/when),
 --      unlinks it from its Auth account, then deletes that Auth account only if
 --      no profile at all still links to it. History rows are untouched (they
 --      reference the profile, which stays).
@@ -40,8 +40,8 @@
 --      changed or reactivated; deleted_at/deleted_by can only be set by
 --      delete_employee.
 --   5. redirect_profile_delete (API users only): a direct DELETE on profiles
---      (older app builds) becomes delete_employee — same checks, history kept,
---      Auth account removed — instead of a hard delete that failed or left the
+--      (older app builds) becomes delete_employee - same checks, history kept,
+--      Auth account removed - instead of a hard delete that failed or left the
 --      sign-in account behind.
 --   Edge Functions (service role) keep their behaviour: create-employee's
 --   rollback still hard-deletes a profile it just created.
@@ -142,7 +142,7 @@ BEGIN
       auth_user_id = NULL
   WHERE id = t.id;
 
-  -- Remove the old sign-in account so the email can be used again — but never
+  -- Remove the old sign-in account so the email can be used again - but never
   -- one that any profile (any organization) still links to.
   IF v_auth IS NOT NULL AND NOT EXISTS (SELECT 1 FROM profiles WHERE auth_user_id = v_auth) THEN
     DELETE FROM auth.users WHERE id = v_auth;

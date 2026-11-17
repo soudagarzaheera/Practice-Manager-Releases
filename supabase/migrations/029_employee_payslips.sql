@@ -4,11 +4,11 @@
 -- Inspected first: CTC lives only in employee_salary_history (009 removed it
 -- from profiles), one row per effective date with company_id (028). Its only
 -- policy, salary_partner_only, gives partners full access and everyone else
--- nothing. The monthly salary itself is not stored — the app calculates it
+-- nothing. The monthly salary itself is not stored - the app calculates it
 -- from that history plus attendance, leave and holidays, which employees can
 -- already read for themselves.
 --
--- 1. Employees may READ their own salary history rows — never anyone else's.
+-- 1. Employees may READ their own salary history rows - never anyone else's.
 --    Writes stay partner-only (salary_partner_only, unchanged). Nobody can
 --    query another employee's CTC: the only rows a non-partner can see are
 --    WHERE profile_id = their own profile.

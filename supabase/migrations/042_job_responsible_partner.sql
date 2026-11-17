@@ -32,7 +32,7 @@
 -- task_overdue (CC), job_closed (own copy), partner daily summary (scope).
 --
 -- RLS on jobs is unchanged. org_partners() lets every member list the
--- organization's partners (id, name, company, active) — profiles RLS hides
+-- organization's partners (id, name, company, active) - profiles RLS hides
 -- other-company partners from non-partners, which would leave the dropdown and
 -- the job card blank.
 --
@@ -112,7 +112,7 @@ BEGIN
       NEW.responsible_partner_id := v_default;
       RETURN NEW;
     END IF;
-    -- Choosing someone other than the default needs the change permission —
+    -- Choosing someone other than the default needs the change permission -
     -- except when the client has no Partner to default to: then whoever may
     -- raise the job has to name one.
     IF v_api AND v_default IS NOT NULL AND NEW.responsible_partner_id <> v_default
@@ -131,7 +131,7 @@ BEGIN
           USING ERRCODE = '42501';
       END IF;
       IF NEW.responsible_partner_id IS NULL THEN
-        RAISE EXCEPTION 'A job''s responsible partner cannot be removed — choose another partner instead.'
+        RAISE EXCEPTION 'A job''s responsible partner cannot be removed - choose another partner instead.'
           USING ERRCODE = '23502';
       END IF;
     END IF;
@@ -385,7 +385,7 @@ BEGIN
 
     IF TG_OP = 'INSERT' THEN
       -- Same approver set as CAN.approveBudget (Assistant Manager, Manager,
-      -- Partner — 036), with the job opener kept only when they belong to the
+      -- Partner - 036), with the job opener kept only when they belong to the
       -- requester's company.
       v_cc := CASE WHEN profile_rank(NEW.requested_by) < 90
                    THEN notif_company_partners(NEW.organization_id, NEW.requested_by)

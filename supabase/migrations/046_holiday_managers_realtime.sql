@@ -1,5 +1,5 @@
 -- ==============================================================================
--- 046: COMPANY HOLIDAYS — MANAGERS & ASSISTANT MANAGERS, LIVE UPDATES
+-- 046: COMPANY HOLIDAYS - MANAGERS & ASSISTANT MANAGERS, LIVE UPDATES
 -- ==============================================================================
 -- Builds on 043 (holiday management). Holidays stay ONE organization-wide list,
 -- shown in every employee's calendar whatever their company, designation or

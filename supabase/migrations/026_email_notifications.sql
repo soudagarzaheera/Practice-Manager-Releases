@@ -263,7 +263,7 @@ $$;
 -- ---- 4. TASK ASSIGNED / REASSIGNED ------------------------------------------------
 -- Fires only when assigned_to is set on insert or actually changes. The
 -- previous assignee is never emailed. A closed job cannot get here with a new
--- assignee (trg_tasks_closed_job, 025, rejects it first) — checked again anyway.
+-- assignee (trg_tasks_closed_job, 025, rejects it first) - checked again anyway.
 CREATE OR REPLACE FUNCTION notif_task_assigned()
 RETURNS TRIGGER
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
@@ -556,7 +556,7 @@ CREATE TRIGGER trg_notif_timesheets_update
   FOR EACH STATEMENT EXECUTE FUNCTION notif_timesheets_changed();
 
 -- ---- 7. BUDGETED HOURS REQUEST / APPROVED / REJECTED ------------------------------
--- Partners never request (CAN.requestBudget(), 024) — unchanged; this only
+-- Partners never request (CAN.requestBudget(), 024) - unchanged; this only
 -- reacts to rows that already exist.
 CREATE OR REPLACE FUNCTION notif_budget_requests()
 RETURNS TRIGGER
@@ -786,7 +786,7 @@ $$;
 -- task + assignee + due date [+ overdue bucket], or per partner + local date),
 -- so extra or missed runs never double-send or skip a day.
 -- "Today" is the organization's local date (notification_settings.timezone,
--- default Asia/Kolkata) — never the UTC date. p_org limits a manual run to
+-- default Asia/Kolkata) - never the UTC date. p_org limits a manual run to
 -- one organization (cron passes nothing = all organizations).
 DROP FUNCTION IF EXISTS enqueue_scheduled_notifications(timestamptz);
 CREATE OR REPLACE FUNCTION enqueue_scheduled_notifications(p_now TIMESTAMPTZ DEFAULT now(), p_org UUID DEFAULT NULL)
@@ -965,7 +965,7 @@ $$;
 -- ---- 12. dispatcher support (service role only) -------------------------------------
 
 -- Claim a batch to send. Expired rows are closed out first; rows stuck in
--- 'processing' (a crashed run) are reclaimed after 10 minutes — safe, because
+-- 'processing' (a crashed run) are reclaimed after 10 minutes - safe, because
 -- the Edge Function sends with Resend's Idempotency-Key = row id.
 CREATE OR REPLACE FUNCTION claim_email_notifications(p_limit INT DEFAULT 20, p_org UUID DEFAULT NULL)
 RETURNS SETOF email_notifications

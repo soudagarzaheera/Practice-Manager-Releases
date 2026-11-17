@@ -3,15 +3,15 @@
 -- Office sites belong to the ORGANIZATION, not to one company.
 --
 -- Before (012 / 028 / 036):
---   * locations.company_id NOT NULL — every site had to name a company.
---   * locations RLS: auth_company_ok(company_id) — managers saw/managed only
+--   * locations.company_id NOT NULL - every site had to name a company.
+--   * locations RLS: auth_company_ok(company_id) - managers saw/managed only
 --     their own company's sites; employees saw only their company's active sites.
 --   * trg_validate_attendance_site_punch rejected a punch when the employee's
 --     company <> site's company ("The selected site does not belong to your company.").
 --
 -- After:
 --   * locations.company_id is nullable. New sites are saved without it.
---     Existing values are KEPT, unchanged — they are no longer used for access
+--     Existing values are KEPT, unchanged - they are no longer used for access
 --     or validation. Keeping them means installed older app builds (which still
 --     filter punch sites by company on the client) keep working exactly as today
 --     until they update. Nothing is deleted; no attendance row is touched.

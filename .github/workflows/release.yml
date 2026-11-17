@@ -101,7 +101,7 @@ jobs:
             --jq ".[] | select(.tag_name == \"$RELEASE_TAG\") | \"\(.id) \(.draft)\"" > "$RUNNER_TEMP/existing.txt"
           COUNT="$(grep -c . "$RUNNER_TEMP/existing.txt" || true)"
           if [ "$COUNT" -gt 1 ]; then
-            echo "::error::$COUNT releases already use $RELEASE_TAG — sort them out on GitHub first."; exit 1
+            echo "::error::$COUNT releases already use $RELEASE_TAG - sort them out on GitHub first."; exit 1
           fi
           if grep -q ' false$' "$RUNNER_TEMP/existing.txt"; then
             echo "::error::$RELEASE_TAG is already published. Release a new version instead."; exit 1
@@ -194,7 +194,7 @@ jobs:
             fi
             echo "Not visible yet (latest: '${LATEST:-?}'), retrying in 10s…"; sleep 10
           done
-          echo "::error::$RELEASE_TAG was published but github.com does not serve it as the latest release with latest.yml — check the Releases page."
+          echo "::error::$RELEASE_TAG was published but github.com does not serve it as the latest release with latest.yml - check the Releases page."
           exit 1
 
       - name: Keep the build output

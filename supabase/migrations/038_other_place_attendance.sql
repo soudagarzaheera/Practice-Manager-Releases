@@ -8,7 +8,7 @@
 -- Inspected first (repo + live DB, 2026-10-31): attendance_punches has
 -- location_id (nullable FK to locations), place_label NOT NULL, latitude,
 -- longitude, distance_meters, is_within_geofence, needs_review,
--- accuracy_meters (006). No company column — the employee's company came
+-- accuracy_meters (006). No company column - the employee's company came
 -- from profiles. trg_validate_attendance_site_punch (012, 037) requires a
 -- site for every API insert.
 --
@@ -16,13 +16,13 @@
 -- except the new columns being filled):
 --   location_type     TEXT NOT NULL DEFAULT 'site', CHECK IN ('site','other').
 --                     Every existing row becomes 'site' (what it was).
---   location_note     TEXT NULL (<= 200 chars) — optional description, Other Place only.
---   resolved_address  TEXT NULL (<= 500 chars) — reverse-geocoded address, Other Place only.
+--   location_note     TEXT NULL (<= 200 chars) - optional description, Other Place only.
+--   resolved_address  TEXT NULL (<= 500 chars) - reverse-geocoded address, Other Place only.
 --   company_id        UUID NOT NULL, FK (organization_id, company_id) -> companies.
 --                     The employee's company AT PUNCH TIME, set by the server from
 --                     profiles.company_id (any client value is overwritten).
 --                     Existing rows are backfilled from the employee's current
---                     profiles.company_id — the same value reports already use today.
+--                     profiles.company_id - the same value reports already use today.
 --   CHECK: an 'other' punch never references a site (location_id IS NULL).
 --   No permanent locations row is ever created for an Other Place.
 --
@@ -32,7 +32,7 @@
 --                one punch-in and one punch-out per employee per day, out only
 --                after in (the app's existing in -> out -> done rule, now also
 --                enforced by the server so the API cannot add a second record).
---   'site'     : unchanged from 037 — active site of the same organization, inside
+--   'site'     : unchanged from 037 - active site of the same organization, inside
 --                its radius; distance/label/geofence flag set by the server;
 --                note/address cleared.
 --   'other'    : GPS accuracy required (>= 0); location_id forced NULL;
@@ -42,7 +42,7 @@
 --
 -- Read access (attendance_punches_select, replaces 036 B6's): own punches, or
 -- Senior Executive and above (rank >= 50, the app's CAN.seeTeamAtt) for people
--- they can already see (auth_profile_visible — company scope unchanged).
+-- they can already see (auth_profile_visible - company scope unchanged).
 -- Before this, any employee could read colleagues' punch rows including
 -- coordinates; no screen below rank 50 uses them.
 -- Insert policy (own punches) unchanged; no update/delete policy (036 B6).

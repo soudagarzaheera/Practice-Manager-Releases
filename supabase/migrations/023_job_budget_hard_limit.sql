@@ -8,7 +8,7 @@
 -- Additional hours count only once a request is APPROVED, so a pending
 -- request does not unlock anything. jobs.budget_hours is never changed here.
 --
--- Checked on INSERT, and on UPDATE only when hours or job_id change — so
+-- Checked on INSERT, and on UPDATE only when hours or job_id change - so
 -- submitting, approving, querying or undoing existing entries (status-only
 -- updates) never trips it, and historical entries are left as they are
 -- even where a job is already over its budget; such a job simply has no

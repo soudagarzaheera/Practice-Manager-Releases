@@ -1,5 +1,5 @@
 -- ==============================================================================
--- FYNALLIANCE ADVISORS / PRACTICE MANAGER — SUPABASE INITIAL DATABASE SCHEMA
+-- FYNALLIANCE ADVISORS / PRACTICE MANAGER - SUPABASE INITIAL DATABASE SCHEMA
 -- ==============================================================================
 
 -- Enable pgcrypto for gen_random_uuid() if required

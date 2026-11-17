@@ -3,7 +3,7 @@
 -- ==============================================================================
 -- Inspected first (live DB, 2026-10-27): there is no services table. The
 -- service list was hardcoded in index.html (SERVICES) and jobs store only the
--- short code as free text in jobs.service_category (001) — e.g. 'STATAUD'.
+-- short code as free text in jobs.service_category (001) - e.g. 'STATAUD'.
 -- That column is left untouched: it keeps storing the code, and the code is
 -- still what the suggested job code is built from (CLIENT/STATAUD/2026-27).
 --
@@ -14,7 +14,7 @@
 --
 -- Access (existing helpers, 030):
 --   * Read: everyone in the organization.
---   * Add: Partner, Manager and Assistant Manager (auth_rank() >= 60) — the
+--   * Add: Partner, Manager and Assistant Manager (auth_rank() >= 60) - the
 --     same people who can raise a job code.
 --   * No UPDATE / DELETE privilege: there is no management screen yet.
 --   * anon has no privileges.
@@ -72,9 +72,9 @@ BEGIN
     (NEW.id, 'STATAUD', 'Statutory Audit',     10, NULL), (NEW.id, 'TAXAUD', 'Tax Audit',         20, NULL),
     (NEW.id, 'INTAUD',  'Internal Audit',      30, NULL), (NEW.id, 'GSTR1',  'GSTR-1',            40, NULL),
     (NEW.id, 'GSTR3B',  'GSTR-3B',             50, NULL), (NEW.id, 'GSTR9',  'GST Annual Return', 60, NULL),
-    (NEW.id, 'ITRNA',   'ITR — non-audit',     70, NULL), (NEW.id, 'ITRAUD', 'ITR — audit case',  80, NULL),
-    (NEW.id, 'TDSRET',  'TDS Return',          90, NULL), (NEW.id, 'AOC4',   'ROC — AOC-4',      100, NULL),
-    (NEW.id, 'MGT7',    'ROC — MGT-7',        110, NULL), (NEW.id, 'ACCTG',  'Bookkeeping',      120, NULL),
+    (NEW.id, 'ITRNA',   'ITR - non-audit',     70, NULL), (NEW.id, 'ITRAUD', 'ITR - audit case',  80, NULL),
+    (NEW.id, 'TDSRET',  'TDS Return',          90, NULL), (NEW.id, 'AOC4',   'ROC - AOC-4',      100, NULL),
+    (NEW.id, 'MGT7',    'ROC - MGT-7',        110, NULL), (NEW.id, 'ACCTG',  'Bookkeeping',      120, NULL),
     (NEW.id, 'CERT',    'Certification',      130, NULL), (NEW.id, 'ADV',    'Advisory',         140, NULL)
   ON CONFLICT DO NOTHING;
   RETURN NEW;
@@ -95,9 +95,9 @@ CROSS JOIN (VALUES
   ('STATAUD', 'Statutory Audit',     10), ('TAXAUD', 'Tax Audit',         20),
   ('INTAUD',  'Internal Audit',      30), ('GSTR1',  'GSTR-1',            40),
   ('GSTR3B',  'GSTR-3B',             50), ('GSTR9',  'GST Annual Return', 60),
-  ('ITRNA',   'ITR — non-audit',     70), ('ITRAUD', 'ITR — audit case',  80),
-  ('TDSRET',  'TDS Return',          90), ('AOC4',   'ROC — AOC-4',      100),
-  ('MGT7',    'ROC — MGT-7',        110), ('ACCTG',  'Bookkeeping',      120),
+  ('ITRNA',   'ITR - non-audit',     70), ('ITRAUD', 'ITR - audit case',  80),
+  ('TDSRET',  'TDS Return',          90), ('AOC4',   'ROC - AOC-4',      100),
+  ('MGT7',    'ROC - MGT-7',        110), ('ACCTG',  'Bookkeeping',      120),
   ('CERT',    'Certification',      130), ('ADV',    'Advisory',         140)
 ) AS s(code, name, sort_order)
 ON CONFLICT DO NOTHING;

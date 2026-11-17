@@ -1,5 +1,5 @@
 // Formatting helpers. Dates are business dates in the organization's time zone
-// (default Asia/Kolkata) — never the server's UTC clock.
+// (default Asia/Kolkata) - never the server's UTC clock.
 
 export const DEFAULT_TIMEZONE = "Asia/Kolkata";
 

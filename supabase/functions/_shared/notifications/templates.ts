@@ -39,7 +39,7 @@ export type NotificationType =
 type Builder = (d: TemplateData) => EmailContent;
 
 const jobLabel = (d: TemplateData) =>
-  [d.job_code, d.job_title].filter(Boolean).join(" — ");
+  [d.job_code, d.job_title].filter(Boolean).join(" - ");
 
 const leaveTypeLabel = (d: TemplateData) =>
   d.leave_type_label ? `${d.leave_type_label} (${d.leave_type})` : String(d.leave_type ?? "");
@@ -54,7 +54,7 @@ function timesheetTable(entries: TemplateData[] | undefined): EmailTable[] {
   return [listTable(
     "Entries",
     ["Date", "Job code", "Task", "Hours", "Work done"],
-    shown.map((e) => [fmtDate(e.date), e.job_code || "", e.task || "—", fmtHours(e.hours), truncate(e.narration, 160)]),
+    shown.map((e) => [fmtDate(e.date), e.job_code || "", e.task || "-", fmtHours(e.hours), truncate(e.narration, 160)]),
     list.length,
   )];
 }
@@ -315,7 +315,7 @@ export const TEMPLATES: Record<NotificationType, Builder> = {
           due.map((t) => [t.title, t.job_code, t.assignee_name || "Unassigned", fmtDate(t.due_date), statusLabel(t.status)]),
           counts.due),
         listTable("Completed today", ["Task", "Job code", "Completed by"],
-          done.map((t) => [t.title, t.job_code, t.assignee_name || "—"]),
+          done.map((t) => [t.title, t.job_code, t.assignee_name || "-"]),
           counts.completed_today),
         listTable("Other pending tasks", ["Task", "Job code", "Assigned to", "Due", "Status"],
           pending.map((t) => [t.title, t.job_code, t.assignee_name || "Unassigned", fmtDate(t.due_date), statusLabel(t.status)]),
@@ -328,7 +328,7 @@ export const TEMPLATES: Record<NotificationType, Builder> = {
 
   job_closed: (d) => ({
     subject: `Job Closed: ${d.job_code}`,
-    preheader: `${d.job_code} has been closed — no more time or tasks can be added.`,
+    preheader: `${d.job_code} has been closed - no more time or tasks can be added.`,
     title: d.is_responsible_partner && !d.task_count
       ? "A job you are responsible for has been closed"
       : "A job you worked on has been closed",

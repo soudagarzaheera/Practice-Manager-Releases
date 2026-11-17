@@ -1,8 +1,8 @@
 -- ==============================================================================
--- LEAVE MANAGEMENT MODULE  (idempotent — safe to run multiple times)
+-- LEAVE MANAGEMENT MODULE  (idempotent - safe to run multiple times)
 -- ==============================================================================
 -- Inspected first: `leaves` (001_initial_schema.sql) already exists as a
--- PER-DAY record — one row per calendar date — and already has exactly the
+-- PER-DAY record - one row per calendar date - and already has exactly the
 -- status vocabulary this module needs: status IN ('pending','approved',
 -- 'rejected','cancelled'), plus approved_by/approved_at/reason/duration_part
 -- /leave_type. It was populated directly (no application UI ever called
@@ -16,7 +16,7 @@
 -- with its day rows), this migration adds one grouping column to `leaves`
 -- itself: `request_id`. A multi-day application becomes N day-rows sharing
 -- one request_id; "the request" is queried as `WHERE request_id = X` and
--- decided with one bulk UPDATE — exactly the pattern index.html already
+-- decided with one bulk UPDATE - exactly the pattern index.html already
 -- uses for timesheet approval (a job code's rows for a week are approved
 -- together; see decideLine()). This keeps one source of truth for "is this
 -- day on leave" (still just `leaves`, still what leaveOn() reads) while
@@ -28,9 +28,9 @@
 --     never hardcodes leave types or their day counts.
 --   * employee_leave_balances: optional PER-EMPLOYEE allocation override for
 --     a given leave type and year (e.g. a mid-year joiner's pro-rated
---     allowance, or a carried-forward balance). Sparse by design — an
+--     allowance, or a carried-forward balance). Sparse by design - an
 --     employee with no override row simply uses leave_types' default.
--- "Used"/"Pending" are never stored — they are always summed live from
+-- "Used"/"Pending" are never stored - they are always summed live from
 -- `leaves`, so there is nothing to keep in sync or go stale.
 --
 -- The existing `leaves.leave_type` CHECK constraint (CL/EL/SL/ML/PL/LWP) is
@@ -38,19 +38,19 @@
 -- already-used, compliance-relevant enum, and loosening it is a bigger,
 -- separate decision than this module needs to make. leave_types is seeded
 -- with exactly those six codes, so "configurable" today means label/annual
--- allocation/active — adding a genuinely new leave code later needs both a
+-- allocation/active - adding a genuinely new leave code later needs both a
 -- migration (extend the CHECK) and a leave_types row, same as adding a new
 -- role would.
 --
 -- IDEMPOTENCY: this file was previously pasted into the SQL Editor and ran
 -- to completion (every table/column/index/trigger/function/policy/seed row
 -- it creates already exists in this database), but a second paste failed on
--- `CREATE POLICY leaves_select ... already exists` — plain CREATE POLICY
+-- `CREATE POLICY leaves_select ... already exists` - plain CREATE POLICY
 -- and CREATE TRIGGER have no IF NOT EXISTS clause in Postgres. Every
 -- statement below is now guarded so the whole file can be re-run safely:
 -- columns/tables/indexes already used IF NOT EXISTS; triggers and policies
 -- now DROP ... IF EXISTS immediately before recreating (identical
--- definition — not a behaviour change, purely a syntax fix); the function
+-- definition - not a behaviour change, purely a syntax fix); the function
 -- already used CREATE OR REPLACE; the seed insert already used ON CONFLICT
 -- DO NOTHING. Nothing is dropped except a trigger/policy immediately
 -- recreated in the same statement group, no table is touched, and no
@@ -87,9 +87,9 @@ CREATE TRIGGER trg_leave_types_updated_at
 
 -- Seed the existing six leave codes for every organization that already
 -- exists, with standard defaults a partner can edit immediately from the
--- Leave screen. Not mock/demo data — every real org needs at least this
+-- Leave screen. Not mock/demo data - every real org needs at least this
 -- much configuration for the Apply-for-leave form to have anything to list.
--- ON CONFLICT DO NOTHING already makes this safe to re-run — it will never
+-- ON CONFLICT DO NOTHING already makes this safe to re-run - it will never
 -- overwrite a type a partner has since edited.
 INSERT INTO leave_types (organization_id, code, label, annual_days, is_paid)
 SELECT o.id, t.code, t.label, t.annual_days, t.is_paid
@@ -140,13 +140,13 @@ $$;
 REVOKE ALL ON FUNCTION profile_rank(UUID) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION profile_rank(UUID) TO authenticated;
 
--- ---- 4. RLS: leaves — replace the blanket policy ------------------------------
+-- ---- 4. RLS: leaves - replace the blanket policy ------------------------------
 -- Mirrors CAN.approveSheet() in index.html exactly (same rule this app
 -- already uses to decide who approves whose timesheet): a direct manager
 -- sees everything for their own reports; a partner sees everything for any
 -- non-partner. Two additions beyond that: every profile always sees its own
 -- row (to apply/cancel/view history), and any senior-and-up (auth_rank()>=50,
--- matching CAN.seeTeamAtt()) sees APPROVED rows org-wide — this was already
+-- matching CAN.seeTeamAtt()) sees APPROVED rows org-wide - this was already
 -- fully open under the old blanket policy and is needed by the existing
 -- "Team today" attendance board, which has shown who is on approved leave
 -- since before this migration.
@@ -163,7 +163,7 @@ CREATE POLICY leaves_select ON leaves FOR SELECT TO authenticated
     )
   );
 
--- A fresh application must start 'pending' — EXCEPT a partner applying for
+-- A fresh application must start 'pending' - EXCEPT a partner applying for
 -- their own leave, which index.html self-certifies client-side the same
 -- way it already self-certifies a partner's own timesheet (CAN.selfCertify():
 -- there is nobody above a partner to send it to). auth_rank() = 90 is
@@ -179,11 +179,11 @@ CREATE POLICY leaves_insert ON leaves FOR INSERT TO authenticated
   );
 
 -- Write: the owner may only move their OWN row to 'cancelled' (WITH CHECK
--- pins that — it is what stops a plain UPDATE call from the browser console
+-- pins that - it is what stops a plain UPDATE call from the browser console
 -- self-approving a pending request; the owner clause in USING only grants
 -- reaching the row, not what it may become). Whoever is authorized to
 -- decide it (same reports-to/partner rule as SELECT above) may set any
--- status on someone else's row — same trust level this project already
+-- status on someone else's row - same trust level this project already
 -- gives an approver elsewhere (e.g. budget_requests_update), with exact
 -- status-transition correctness left to the client, as there too.
 DROP POLICY IF EXISTS leaves_update ON leaves;
@@ -204,12 +204,12 @@ CREATE POLICY leaves_update ON leaves FOR UPDATE TO authenticated
   );
 
 -- No DELETE policy: approved/rejected/cancelled leave is never deleted,
--- only its status changes — same rule this project already applies to
+-- only its status changes - same rule this project already applies to
 -- budget_requests and expense_claims.
 
 -- ---- 5. RLS: leave_types ------------------------------------------------------
 -- Every signed-in member needs to read the catalogue (to apply for leave and
--- see their balance); only a partner configures it — same boundary as
+-- see their balance); only a partner configures it - same boundary as
 -- CAN.manageTeam()/"Add an employee, change a role".
 DROP POLICY IF EXISTS leave_types_select ON leave_types;
 CREATE POLICY leave_types_select ON leave_types FOR SELECT TO authenticated

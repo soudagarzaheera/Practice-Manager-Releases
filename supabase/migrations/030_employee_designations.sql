@@ -1,7 +1,7 @@
 -- ==============================================================================
 -- 030: EMPLOYEE DESIGNATIONS + JOB CODE / TASK ASSIGNMENT ACCESS
 -- ==============================================================================
--- profiles.role IS the employee's designation — no separate role system. The
+-- profiles.role IS the employee's designation - no separate role system. The
 -- designation list becomes (lowest to highest):
 --
 --   trainee 10 · associate 20 · senior_associate 30 · senior_executive 50 ·
@@ -15,7 +15,7 @@
 --      article -> trainee            (same rank, 10)
 --    partner / manager / associate are unchanged.
 -- 2. auth_rank() / profile_rank() learn the new designations. They mirror the
---    RANK map in index.html — keep both in sync. Every existing threshold
+--    RANK map in index.html - keep both in sync. Every existing threshold
 --    (>= 50 / >= 70 / >= 90) keeps the same meaning: a former senior is now
 --    60, still >= 50 and still < 70.
 -- 3. Creating a job code requires rank >= 60 (Assistant Manager and above):

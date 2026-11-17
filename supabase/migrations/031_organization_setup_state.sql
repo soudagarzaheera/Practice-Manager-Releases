@@ -9,11 +9,11 @@
 --
 -- * New organizations: provision_signup_company() (016) and the legacy
 --   bootstrap_first_admin() (014/015) insert organizations with only a name,
---   so the column starts NULL — no change to signup.
+--   so the column starts NULL - no change to signup.
 -- * Existing organizations that already have a client or a site are marked
 --   complete now (they are configured).
 -- * Setup completes automatically when the organization's first client or
---   first site (locations) is added — trigger, so it holds however the row
+--   first site (locations) is added - trigger, so it holds however the row
 --   is created. A partner can also finish it explicitly via
 --   complete_organization_setup() (the "Skip setup" link).
 -- * Once set it is never cleared: deleting clients/sites later does not put

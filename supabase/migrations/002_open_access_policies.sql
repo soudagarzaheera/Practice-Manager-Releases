@@ -3,7 +3,7 @@
 -- ==============================================================================
 -- 001_initial_schema.sql enables Row Level Security on every table but defines
 -- no policies. With RLS on and no policies, Postgres denies ALL access by
--- default — so the app cannot read or write anything, regardless of the
+-- default - so the app cannot read or write anything, regardless of the
 -- frontend code, until policies exist.
 --
 -- The app currently has no real sign-in flow (the "Signed in as" control is a

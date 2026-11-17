@@ -3,12 +3,12 @@
 -- ==============================================================================
 -- Once jobs.status = 'closed', a task can no longer be created on that job,
 -- moved onto it, or (re)assigned to someone. Reopening the job (status back
--- to open/in_progress — the existing reopenJob() path) restores all of it.
+-- to open/in_progress - the existing reopenJob() path) restores all of it.
 --
 -- Nothing is deleted or changed: closing a job still only updates the jobs
 -- row, and existing tasks, their responsibility history, timesheets,
 -- approvals and costs stay exactly as they are. Only INSERT, and UPDATEs
--- that change job_id or assigned_to, are checked — status/cost edits and
+-- that change job_id or assigned_to, are checked - status/cost edits and
 -- every existing row are unaffected.
 -- ==============================================================================
 
@@ -29,7 +29,7 @@ BEGIN
   WHERE organization_id = NEW.organization_id AND id = NEW.job_id AND status = 'closed';
 
   IF FOUND THEN
-    RAISE EXCEPTION 'Job % is closed — tasks can no longer be assigned. Reopen the job first.', j_code
+    RAISE EXCEPTION 'Job % is closed - tasks can no longer be assigned. Reopen the job first.', j_code
       USING ERRCODE = 'check_violation';
   END IF;
   RETURN NEW;

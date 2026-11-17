@@ -8,7 +8,7 @@
 --
 --   * New columns: description (optional, <= 500), created_by, updated_by,
 --     updated_at. name must be 1–100 characters after trimming.
---   * Duplicates: one holiday per date per organization — the existing
+--   * Duplicates: one holiday per date per organization - the existing
 --     UNIQUE (organization_id, holiday_date) from 001, unchanged.
 --   * Access (RLS) unchanged from 036: every member of the organization reads;
 --     only Partners (auth_rank() >= 90) write, within their own organization.
@@ -68,7 +68,7 @@ BEGIN
 
   IF TG_OP = 'DELETE' THEN
     IF OLD.holiday_date <= v_today THEN
-      RAISE EXCEPTION 'A holiday dated today or earlier cannot be deleted — attendance and earned leave for it are already recorded.'
+      RAISE EXCEPTION 'A holiday dated today or earlier cannot be deleted - attendance and earned leave for it are already recorded.'
         USING ERRCODE = '42501';
     END IF;
     RETURN OLD;
@@ -83,7 +83,7 @@ BEGIN
   ELSE
     IF NEW.holiday_date IS DISTINCT FROM OLD.holiday_date
        AND (OLD.holiday_date <= v_today OR NEW.holiday_date <= v_today) THEN
-      RAISE EXCEPTION 'A holiday can only be moved from one future date to another — edit just its name or description.'
+      RAISE EXCEPTION 'A holiday can only be moved from one future date to another - edit just its name or description.'
         USING ERRCODE = '22023';
     END IF;
     NEW.created_by := OLD.created_by;

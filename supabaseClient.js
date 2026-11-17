@@ -18,7 +18,7 @@ export const supabaseKey =
   (typeof window !== 'undefined' && window.__ENV__ && window.__ENV__.VITE_SUPABASE_PUBLISHABLE_KEY) ||
   '';
 
-// Convenience alias — this is the publishable/anon key, safe for the browser.
+// Convenience alias - this is the publishable/anon key, safe for the browser.
 // Never the service_role key; that only ever lives server-side (see the
 // create-employee Edge Function).
 export const supabaseAnonKey = supabaseKey;

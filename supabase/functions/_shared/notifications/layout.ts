@@ -26,7 +26,7 @@ export type EmailContent = {
   tables?: EmailTable[];
   /** A quoted block such as a reason or instruction. */
   note?: { label: string; text: string } | null;
-  /** Button — omitted automatically when the link is null (no APP_BASE_URL). */
+  /** Button - omitted automatically when the link is null (no APP_BASE_URL). */
   action?: { label: string; url: string | null } | null;
   tone?: Tone;
 };
@@ -139,6 +139,6 @@ export function renderText(c: EmailContent, ctx: RenderContext): string {
     if (t.more) lines.push(`  and ${t.more} more…`);
   }
   if (c.action && c.action.url) lines.push("", `${c.action.label}: ${c.action.url}`);
-  lines.push("", "—", `Automated notification from ${ctx.appName} for ${ctx.companyName}. Please do not reply.`);
+  lines.push("", "-", `Automated notification from ${ctx.appName} for ${ctx.companyName}. Please do not reply.`);
   return lines.join("\n");
 }

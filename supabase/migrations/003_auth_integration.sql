@@ -4,21 +4,21 @@
 -- 002_open_access_policies.sql intentionally granted the anon key full access
 -- because the app had no real sign-in flow yet ("Signed in as" was a local
 -- view-switcher, not Supabase Auth). That note said to replace these once
--- Supabase Auth was wired up — this migration is that replacement.
+-- Supabase Auth was wired up - this migration is that replacement.
 --
 -- Model:
 --   * Every table's rows belong to one organization. A signed-in user's own
 --     organization is looked up from their `profiles` row via auth.uid().
---   * `anon` loses all access — every table now requires a real session.
+--   * `anon` loses all access - every table now requires a real session.
 --   * `authenticated` keeps the same broad, organization-scoped access the
---     app already assumed (the app's finer-grained checks — who can approve
---     a sheet, close a job, etc. — remain enforced in the client's CAN.*
+--     app already assumed (the app's finer-grained checks - who can approve
+--     a sheet, close a job, etc. - remain enforced in the client's CAN.*
 --     logic, same as before this migration; only the login gate and the
 --     employee-creation path change trust boundaries here).
 --   * `profiles` is the exception: INSERT is removed for authenticated/anon
 --     entirely (new employees can only be created by the create-employee
 --     Edge Function, which uses the service-role key and bypasses RLS), and
---     UPDATE/DELETE require the caller to be a partner — mirroring the
+--     UPDATE/DELETE require the caller to be a partner - mirroring the
 --     existing CAN.manageTeam() rule (rank()>=90, i.e. role='partner').
 -- ==============================================================================
 
@@ -99,7 +99,7 @@ CREATE POLICY authenticated_org_access ON expense_claim_lines FOR ALL TO authent
 
 -- ---- profiles: read broadly, but writes are locked down ----------------------
 -- Everyone signed in can see their firm's people (team list, reporting tree,
--- assignment pickers, etc. — unchanged from today's behaviour).
+-- assignment pickers, etc. - unchanged from today's behaviour).
 CREATE POLICY profiles_select ON profiles FOR SELECT TO authenticated
   USING (organization_id = auth_org_id());
 
@@ -110,7 +110,7 @@ CREATE POLICY profiles_select ON profiles FOR SELECT TO authenticated
 
 -- Editing/deactivating/reactivating an employee (existing "Add Employee"
 -- screen's edit path) stays a direct client call, but only a partner can do
--- it — mirrors CAN.manageTeam().
+-- it - mirrors CAN.manageTeam().
 CREATE POLICY profiles_update ON profiles FOR UPDATE TO authenticated
   USING (organization_id = auth_org_id() AND auth_is_partner())
   WITH CHECK (organization_id = auth_org_id());

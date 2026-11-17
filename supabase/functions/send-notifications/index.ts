@@ -7,8 +7,8 @@
 // records the outcome on the same row:
 //
 //   sent      provider_message_id + sent_at recorded
-//   retry     temporary failure (network, 429, 5xx) — retried with backoff
-//   failed    permanent failure, or MAX_ATTEMPTS reached — not retried
+//   retry     temporary failure (network, 429, 5xx) - retried with backoff
+//   failed    permanent failure, or MAX_ATTEMPTS reached - not retried
 //   skipped   nothing to send (no valid recipient address)
 //   dry_run   rendered but not sent (NOTIFICATIONS_DRY_RUN or {"dry_run":true})
 //
@@ -87,7 +87,7 @@ async function dispatch(req: Request): Promise<Response> {
   // queue untouched (rows expire on their own schedule) instead of burning
   // retry attempts.
   if (!dryRun && !canSendEmail()) {
-    console.warn("send-notifications: RESEND_API_KEY or NOTIFICATION_FROM_EMAIL not set — queue left pending");
+    console.warn("send-notifications: RESEND_API_KEY or NOTIFICATION_FROM_EMAIL not set - queue left pending");
     return json({ status: "not_configured", processed: 0 });
   }
 
@@ -133,7 +133,7 @@ async function dispatch(req: Request): Promise<Response> {
         case "dry_run":
           patch = {
             status: "dry_run", subject: outcome.subject, recipient_email: outcome.to.join(", "),
-            cc_emails: outcome.cc, error_message: "Dry run — rendered, not sent.",
+            cc_emails: outcome.cc, error_message: "Dry run - rendered, not sent.",
           };
           if (body.preview) {
             previews.push({ id: row.id, type: row.event_type, subject: outcome.subject, to: outcome.to, cc: outcome.cc, text: outcome.text, html: outcome.html });

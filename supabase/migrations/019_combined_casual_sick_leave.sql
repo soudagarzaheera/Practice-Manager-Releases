@@ -8,14 +8,14 @@
 --   * leaves.leave_type is a plain code (no FK), CHECK-limited to
 --     CL/EL/SL/ML/PL/LWP. leave_types.code has the same CHECK.
 --   * employee_leave_balances.(organization_id, leave_type_code) is the only
---     FK into leave_types (ON DELETE CASCADE, no ON UPDATE) — so renaming or
+--     FK into leave_types (ON DELETE CASCADE, no ON UPDATE) - so renaming or
 --     deleting the CL/SL rows would either fail or cascade-delete overrides.
 --
 -- Therefore:
 --   1. Both CHECK constraints are extended with 'CSL' (the only schema change;
 --      the existing codes stay valid).
 --   2. A new CSL row is added (12 days, paid, active) unless one already
---      exists — never duplicated.
+--      exists - never duplicated.
 --   3. CL and SL are deactivated, not deleted or renamed: their rows keep
 --      existing overrides valid and keep history resolvable.
 --   4. Per-employee CL/SL overrides are copied to CSL for the same
@@ -43,7 +43,7 @@ DECLARE
   target_org CONSTANT UUID := '1686f5d6-abe4-43d9-8a5b-4204a4a71d71';  -- Fynalliance Advisors
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM organizations WHERE id = target_org) THEN
-    RAISE NOTICE '019: organization % not found — no leave types changed', target_org;
+    RAISE NOTICE '019: organization % not found - no leave types changed', target_org;
     RETURN;
   END IF;
 

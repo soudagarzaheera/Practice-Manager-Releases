@@ -2,8 +2,8 @@
 //
 // The renderer is the same Vite build the website uses (dist/), served from a
 // custom app:// scheme instead of file:// so the page gets a stable, secure
-// origin (app://practice-manager). localStorage — where Supabase keeps the
-// signed-in session — is tied to that origin and lives in the user-data folder
+// origin (app://practice-manager). localStorage - where Supabase keeps the
+// signed-in session - is tied to that origin and lives in the user-data folder
 // (%APPDATA%\Practice Manager), which installs and updates never touch, so
 // employees stay signed in across updates.
 //
@@ -26,7 +26,7 @@ protocol.registerSchemesAsPrivileged([{
   privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
 }]);
 
-// One running copy only — a second launch focuses the existing window.
+// One running copy only - a second launch focuses the existing window.
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {

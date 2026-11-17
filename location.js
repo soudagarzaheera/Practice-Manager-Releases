@@ -1,6 +1,6 @@
 /* Device location for attendance punches.
  *
- * Native app (Capacitor Android/iOS): @capacitor/geolocation — checks the
+ * Native app (Capacitor Android/iOS): @capacitor/geolocation - checks the
  * runtime permission, asks for it when needed, then reads a fresh GPS fix.
  * Browser / Electron desktop: the standard navigator.geolocation API, as before.
  *
@@ -94,17 +94,17 @@ export function locationErrorMessage(err) {
       return native
         ? 'Location permission is denied. To punch, open Android Settings → Apps → Practice Manager → ' +
           'Permissions → Location, choose "Allow only while using the app" and turn on "Use precise location", then try again'
-        : 'Location permission denied — allow location access and try again';
+        : 'Location permission denied - allow location access and try again';
     case 'services_off':
-      return 'Location (GPS) is turned off on this device — turn on Location in your phone\'s quick settings ' +
+      return 'Location (GPS) is turned off on this device - turn on Location in your phone\'s quick settings ' +
         'or Settings → Location, then try again';
     case 'timeout':
-      return 'Location request timed out — try again, ideally outdoors or near a window';
+      return 'Location request timed out - try again, ideally outdoors or near a window';
     case 'unsupported':
       return 'This browser does not support location';
     case 'unavailable':
-      return 'Location unavailable — check GPS/network and try again';
+      return 'Location unavailable - check GPS/network and try again';
     default:
-      return 'Location error — ' + ((err && err.message) || 'unknown error');
+      return 'Location error - ' + ((err && err.message) || 'unknown error');
   }
 }

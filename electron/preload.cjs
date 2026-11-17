@@ -1,5 +1,5 @@
 // Preload (sandboxed, context-isolated). The page gets exactly one object,
-// window.desktopApp, with fixed update actions — no ipcRenderer, no Node, no
+// window.desktopApp, with fixed update actions - no ipcRenderer, no Node, no
 // arbitrary channels.
 
 const { contextBridge, ipcRenderer } = require("electron");

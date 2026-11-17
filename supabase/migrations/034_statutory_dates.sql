@@ -3,25 +3,25 @@
 -- ==============================================================================
 -- Inspected first (live DB, 2026-10-27): statutory_compliances is empty in
 -- every organization, requires a client and is shaped for auto-raising job
--- codes (nothing raises them — no function or cron uses it). It is left
+-- codes (nothing raises them - no function or cron uses it). It is left
 -- untouched; firm-entered statutory deadlines get their own table.
 --
 --   statutory_categories  one list per organization, shared by its companies
 --                         (like leave types). Customisable; starter list seeded.
 --   statutory_dates       each date belongs to one company (GST/TDS etc. are
 --                         filed per company), optionally to one of its
---                         clients — a client's date always takes the
+--                         clients - a client's date always takes the
 --                         client's company (trigger, section 2b).
 -- The app lists these dates beside statutory_compliances rows in the
 -- Statutory calendar's "Next 60 days" table.
 --
 -- Access (existing helpers, 028/030):
---   * Read: everyone in a company they can access — auth_company_ok():
+--   * Read: everyone in a company they can access - auth_company_ok():
 --     partners every company of their organization, everyone else their own.
 --     Categories are readable organization-wide.
 --   * Write: Partner, Manager and Assistant Manager (auth_rank() >= 60), only
 --     within companies they can access. Same bar as raising job codes.
---   * A category in use cannot be deleted (FK RESTRICT) — deactivate it.
+--   * A category in use cannot be deleted (FK RESTRICT) - deactivate it.
 --   * anon has no privileges.
 -- reminder_days_before is not used by the app (reminders were dropped); no
 -- notification trigger reads this table.

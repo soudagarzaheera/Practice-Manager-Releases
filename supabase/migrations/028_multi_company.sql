@@ -3,16 +3,16 @@
 -- ==============================================================================
 -- Inspected first (live DB, 2026-10-01):
 --   * `companies` already exists (012): id, organization_id, code, name,
---     is_active, created_at — reused, not recreated. It was read-only.
+--     is_active, created_at - reused, not recreated. It was read-only.
 --   * `company_id` already exists on profiles (NOT NULL, 012) and locations
 --     (NOT NULL, 012). No other business table had one.
 --   * Every other table's RLS was organization-wide.
 --
--- Model (existing roles only — no new role system):
+-- Model (existing roles only - no new role system):
 --   Organization ─┬─ Company A ─ employees (profiles.company_id)
 --                 └─ Company B
 --   * Partners (auth_rank() = 90) manage and see every company of their
---     organization — they get the company switcher in the app.
+--     organization - they get the company switcher in the app.
 --   * Everyone else sees their OWN company, plus the explicit relationships
 --     the app already relies on: themselves, their supervisor, their direct
 --     reports, and any job they personally work on (task / time / assignment
@@ -21,7 +21,7 @@
 --
 -- Changes:
 --   1. companies: partners may create/rename/(de)activate; unique name per org.
---   2. company_id added to clients, jobs, employee_salary_history — backfilled
+--   2. company_id added to clients, jobs, employee_salary_history - backfilled
 --      from existing relationships, NOT NULL, composite FK to companies.
 --      Tasks, timesheets, budget requests and compliances follow their job /
 --      client; leave, attendance, claims follow the employee's profile.
@@ -399,7 +399,7 @@ CREATE POLICY locations_update ON locations FOR UPDATE TO authenticated
   USING (organization_id = auth_org_id() AND auth_rank() >= 70 AND auth_company_ok(company_id))
   WITH CHECK (organization_id = auth_org_id() AND auth_rank() >= 70 AND auth_company_ok(company_id));
 
--- employee_salary_history: unchanged (partner only — partners cover every company).
+-- employee_salary_history: unchanged (partner only - partners cover every company).
 
 -- ---- 5. privileges -------------------------------------------------------------------
 REVOKE ALL ON FUNCTION auth_company_id() FROM PUBLIC, anon;

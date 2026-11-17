@@ -1,15 +1,15 @@
 -- ==============================================================================
--- 040: COMPLETE A TASK FROM APPROVED TIME — SAFELY (replaces 018, which never ran)
+-- 040: COMPLETE A TASK FROM APPROVED TIME - SAFELY (replaces 018, which never ran)
 -- ==============================================================================
--- Inspected first (live DB, 2026-11-05): nothing from 018 exists — no functions,
--- no triggers, the old foreign key — yet index.html expects the behaviour.
+-- Inspected first (live DB, 2026-11-05): nothing from 018 exists - no functions,
+-- no triggers, the old foreign key - yet index.html expects the behaviour.
 -- 018's rule must not be applied: any one approved entry completed the task, and
 -- 4 of the 6 linked entries live were logged by someone other than the assignee.
 --
 -- A task now becomes Done only when an entry moves to 'approved' and ALL hold:
 --   1. the entry names that exact task, on the same organization and job;
 --   2. the entry was logged by the task's current assignee;
---   3. the task is 'todo' or 'in_progress' — "Waiting on client", "For review"
+--   3. the task is 'todo' or 'in_progress' - "Waiting on client", "For review"
 --      and "Changes asked" are someone's explicit decision and are left alone;
 --   4. the job is not closed;
 --   5. none of the assignee's other entries on the task is still unapproved;

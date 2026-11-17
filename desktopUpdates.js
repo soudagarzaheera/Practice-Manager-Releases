@@ -96,7 +96,7 @@ if (bridge) {
     } else if (s.state === 'available') {
       $('.upd-title').textContent = 'Version ' + s.version + ' is available';
       $('.upd-text').textContent = 'You are on version ' + s.currentVersion +
-        '. The update downloads in the background — you can keep working.';
+        '. The update downloads in the background - you can keep working.';
       $('.upd-notes').textContent = s.releaseNotes || '';
       actions.append(
         button('Later', false, () => { bridge.later(); hide(); }),
@@ -112,7 +112,7 @@ if (bridge) {
     } else if (s.state === 'downloaded') {
       $('.upd-title').textContent = 'Update ready to install';
       $('.upd-text').textContent = 'Restart Practice Manager to install version ' + s.version +
-        '. Save anything you are editing first — you will stay signed in.';
+        '. Save anything you are editing first - you will stay signed in.';
       actions.append(
         button('Later', false, hide),
         button('Restart & Install', true, (e) => { e.target.disabled = true; e.target.textContent = 'Restarting…'; bridge.install(); }));

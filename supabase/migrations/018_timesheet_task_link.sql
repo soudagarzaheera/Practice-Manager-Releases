@@ -8,7 +8,7 @@
 -- Context: timesheet_entries.task_id (with a composite FK to tasks) has existed
 -- since 001_initial_schema.sql but the app never wrote it. The Timesheet screen
 -- now lets a user optionally pick one of the selected job code's tasks, and
--- stores that task's id here — no new table, no copy of the task name.
+-- stores that task's id here - no new table, no copy of the task name.
 --
 -- This migration:
 --   1. Makes deleting a task null only task_id on referencing timesheet rows.
@@ -23,7 +23,7 @@
 --      task update commit or roll back together. It runs as the caller
 --      (SECURITY INVOKER), so the tasks table's existing RLS still applies,
 --      and only fires for a manager/partner (auth_rank() >= 70, the same rank
---      map as CAN in index.html) — or a trusted backend session with no
+--      map as CAN in index.html) - or a trusted backend session with no
 --      auth.uid(). Draft/pending/queried entries never touch the task.
 -- ==============================================================================
 

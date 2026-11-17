@@ -4,7 +4,7 @@
 //   2. builds the template,
 //   3. sends through Resend with an idempotency key,
 //   4. classifies failures as retryable or permanent,
-// and never throws. It does not write to the database — the caller records
+// and never throws. It does not write to the database - the caller records
 // the outcome on the email_notifications row.
 
 import { notificationConfig } from "./config.ts";
@@ -18,7 +18,7 @@ type RpcClient = {
 };
 
 export type NotificationRequest = {
-  /** Stable id of the queued notification — also the Resend idempotency key. */
+  /** Stable id of the queued notification - also the Resend idempotency key. */
   id: string;
   organizationId: string;
   type: string;

@@ -26,10 +26,10 @@ const APP_ORIGIN = "app://practice-manager";
 
 let getWindow = () => null;
 let state = { state: "idle", currentVersion: app.getVersion() };
-let userInitiated = false;   // a manual check / download — errors are shown, not swallowed
+let userInitiated = false;   // a manual check / download - errors are shown, not swallowed
 let busy = false;
 // The download in flight, if any: its cancellation token and when it last made
-// progress. Set from the Download click until that download settles — while
+// progress. Set from the Download click until that download settles - while
 // set, no second download or check starts.
 let download = null;
 
@@ -144,7 +144,7 @@ function wire() {
     send({
       state: "error",
       message: isOffline(err)
-        ? "Can't reach the update server — check your internet connection and try again."
+        ? "Can't reach the update server - check your internet connection and try again."
         : wasDownloading ? "The update download failed. Please try again." : "Couldn't check for updates. Please try again later.",
       retry: wasDownloading ? "download" : "check",
     });
@@ -174,7 +174,7 @@ function registerIpc() {
     // and which clears its in-progress download, so "Try again" starts afresh.
     const watchdog = setInterval(() => {
       if (run.token.cancelled || Date.now() - run.lastProgressAt < STALL_MS) return;
-      log("warn", `download stalled — no progress for ${STALL_MS / 1000}s; cancelling`);
+      log("warn", `download stalled - no progress for ${STALL_MS / 1000}s; cancelling`);
       run.token.cancel();
       send({ state: "error", message: "The update download stopped making progress. Check your connection and try again.", retry: "download" });
     }, STALL_POLL_MS);

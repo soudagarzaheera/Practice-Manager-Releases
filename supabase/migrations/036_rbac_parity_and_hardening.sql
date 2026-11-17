@@ -1,37 +1,37 @@
 -- 036_rbac_parity_and_hardening.sql
 --
--- Part A — Manager / Assistant Manager parity.
+-- Part A - Manager / Assistant Manager parity.
 --   Assistant Managers (rank 60) get exactly the Manager (rank 70) operational
 --   permissions. Every "auth_rank() >= 70" below becomes ">= 60". Partner-only
 --   rules (rank 90 / auth_is_partner()) and company scope (auth_company_ok,
 --   auth_all_companies = Partner) are unchanged. Senior Executive (50) and
 --   below gain nothing.
 --
--- Part B — security fixes from the RBAC audit (2026-10-31). Each closes a
+-- Part B - security fixes from the RBAC audit (2026-10-31). Each closes a
 --   path where the app's rule existed only in the browser. The rules
 --   enforced are the ones the app already applies (CAN.* in index.html);
 --   nothing the app does today is blocked.
---     B1 timesheet_entries — own rows only; status changes follow the app
+--     B1 timesheet_entries - own rows only; status changes follow the app
 --        (submit → pending; partner self-certify; approver approves/queries/
 --        undoes; only approvers record decisions). Fixes self-approval.
---     B2 expense_claims    — draft → submitted (owner) → approved/rejected
+--     B2 expense_claims    - draft → submitted (owner) → approved/rejected
 --        (rank >= 60, not own) → paid (rank >= 60 not own, or legacy
 --        "accounts"). Claim lines only on own DRAFT claims.
---     B3 budget_requests   — inserted as pending only; a decision can only
+--     B3 budget_requests   - inserted as pending only; a decision can only
 --        set status/decided_by/decided_at, once.
---     B4 clients           — add/edit rank >= 60; archive (is_active
+--     B4 clients           - add/edit rank >= 60; archive (is_active
 --        true → false) and delete: Partner.
---     B5 jobs              — delete: Partner (the app never deletes jobs).
---     B6 attendance_punches — insert own (existing trigger); no update or
+--     B5 jobs              - delete: Partner (the app never deletes jobs).
+--     B6 attendance_punches - insert own (existing trigger); no update or
 --        delete through the API.
 --     B7 holidays (write: Partner), audit_logs (insert as yourself only,
 --        never changed or deleted), review_notes (write own only).
---     B8 tasks             — split FOR ALL; below Assistant Manager only the
+--     B8 tasks             - split FOR ALL; below Assistant Manager only the
 --        status of their own tasks (Senior Executive: any visible task, as
 --        CAN.editTaskStatus); task cost: Partner.
 --     B9 nil_timesheets (own), job_assignments and statutory_compliances
---        (write rank >= 60) — were FOR ALL for anyone who could see the row.
---     B11 leaves_insert    — "auth_rank() = 90" written as ">= 90".
+--        (write rank >= 60) - were FOR ALL for anyone who could see the row.
+--     B11 leaves_insert    - "auth_rank() = 90" written as ">= 90".
 --     B12 TRUNCATE revoked from anon/authenticated (not subject to RLS).
 --
 -- Guards apply to API users only (current_user authenticated/anon). Edge
@@ -149,7 +149,7 @@ BEGIN
 
     IF TG_OP = 'INSERT' THEN
       -- Same approver set as CAN.approveBudget (Assistant Manager, Manager,
-      -- Partner — 036), with the job opener kept only when they belong to the
+      -- Partner - 036), with the job opener kept only when they belong to the
       -- requester's company.
       v_cc := CASE WHEN profile_rank(NEW.requested_by) < 90
                    THEN notif_company_partners(NEW.organization_id, NEW.requested_by)
@@ -265,7 +265,7 @@ $function$;
 -- ============================================================================
 
 -- B1 timesheet_entries ------------------------------------------------------
--- Who may decide someone's timesheet: same rule as CAN.approveSheet() —
+-- Who may decide someone's timesheet: same rule as CAN.approveSheet() -
 -- their direct supervisor, or any Partner for a non-partner.
 CREATE OR REPLACE FUNCTION timesheet_can_decide(p_owner UUID)
 RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
@@ -316,7 +316,7 @@ BEGIN
      OR NEW.approved_by IS DISTINCT FROM OLD.approved_by OR NEW.approved_at IS DISTINCT FROM OLD.approved_at THEN
     RAISE EXCEPTION 'That change to a time entry is not allowed.' USING ERRCODE = '42501';
   END IF;
-  -- Hours, job, date, narration … — everything except the decision columns.
+  -- Hours, job, date, narration … - everything except the decision columns.
   v_content := (to_jsonb(NEW) - 'status' - 'query_reason' - 'decided_by' - 'decided_at' - 'updated_at')
                IS DISTINCT FROM
                (to_jsonb(OLD) - 'status' - 'query_reason' - 'decided_by' - 'decided_at' - 'updated_at');
@@ -522,7 +522,7 @@ BEGIN
     RAISE EXCEPTION 'Only partners can edit task costs.' USING ERRCODE = '42501';
   END IF;
   IF auth_rank() >= 60 THEN RETURN NEW; END IF;
-  -- Below Assistant Manager: only the status (CAN.editTaskStatus — own tasks,
+  -- Below Assistant Manager: only the status (CAN.editTaskStatus - own tasks,
   -- or any visible task from Senior Executive up).
   IF (to_jsonb(NEW) - 'status' - 'completed_at' - 'updated_at')
      IS DISTINCT FROM (to_jsonb(OLD) - 'status' - 'completed_at' - 'updated_at') THEN
@@ -565,7 +565,7 @@ CREATE POLICY statutory_compliances_write ON statutory_compliances FOR ALL TO au
   USING (organization_id = auth_org_id() AND auth_client_visible(client_id) AND auth_rank() >= 60)
   WITH CHECK (organization_id = auth_org_id() AND auth_client_visible(client_id) AND auth_rank() >= 60);
 
--- (Sites: turning a site on/off stays with locations_update, rank >= 60 after A3 —
+-- (Sites: turning a site on/off stays with locations_update, rank >= 60 after A3 -
 --  the Manager permission today, now shared with Assistant Managers.)
 
 -- B11 leaves_insert: same rule, written as ">= 90" instead of "= 90"

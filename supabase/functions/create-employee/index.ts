@@ -3,11 +3,11 @@
 // Called by an authenticated administrator's browser (never directly by an
 // employee) to provision a brand-new employee: a Supabase Auth account plus
 // the linked `profiles` row. This is the ONLY place a new profile row with
-// an auth_user_id gets created — the client is not allowed to insert into
+// an auth_user_id gets created - the client is not allowed to insert into
 // `profiles` directly (see migrations/003_auth_integration.sql).
 //
 // SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY are injected
-// automatically by the Supabase platform for every Edge Function — nothing
+// automatically by the Supabase platform for every Edge Function - nothing
 // to configure. The service-role key never leaves this server-side function.
 
 // @ts-ignore: Deno ESM URL import
@@ -21,12 +21,12 @@ declare const Deno: {
 };
 
 // Mirrors CAN.manageTeam() in index.html (rank()>=90, which today only the
-// "partner" role reaches — "admin" is a schema-level role not currently
+// "partner" role reaches - "admin" is a schema-level role not currently
 // assignable or ranked in the frontend, so it is intentionally excluded here
 // too rather than silently granted extra trust).
 const ADMIN_ROLES = ["partner"];
 
-// Mirrors ASSIGNABLE_ROLES in index.html — the set of roles the Add Employee
+// Mirrors ASSIGNABLE_ROLES in index.html - the set of roles the Add Employee
 // form is allowed to hand out.
 const ASSIGNABLE_ROLES = [
   "partner", "manager", "assistant_manager", "senior_executive",
@@ -58,7 +58,7 @@ const MAX_CTC = 9999999999.99;
 // character class is present so any Auth password policy is met.
 const PW_SETS = ["ABCDEFGHJKLMNPQRSTUVWXYZ", "abcdefghijkmnpqrstuvwxyz", "23456789", "!@#$%*?-_+="];
 function randomIndex(n: number): number {
-  // Rejection sampling — no modulo bias.
+  // Rejection sampling - no modulo bias.
   const limit = Math.floor(0x100000000 / n) * n;
   const buf = new Uint32Array(1);
   do { crypto.getRandomValues(buf); } while (buf[0] >= limit);
@@ -138,7 +138,7 @@ async function handle(req: Request, json: Json): Promise<Response> {
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
   if (!token) return json({ error: "Not authenticated." }, 401);
 
-  // Scoped to the caller's own JWT — used only to confirm who is calling.
+  // Scoped to the caller's own JWT - used only to confirm who is calling.
   const callerClient = createClient(SUPABASE_URL, ANON_KEY, {
     global: { headers: { Authorization: `Bearer ${token}` } },
     auth: { persistSession: false },
@@ -148,7 +148,7 @@ async function handle(req: Request, json: Json): Promise<Response> {
     return json({ error: "Your session is invalid or has expired. Sign in again." }, 401);
   }
 
-  // Service-role client — bypasses RLS. Used only for the privileged checks
+  // Service-role client - bypasses RLS. Used only for the privileged checks
   // and writes below, never to act on data the caller didn't ask for.
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
@@ -168,7 +168,7 @@ async function handle(req: Request, json: Json): Promise<Response> {
     return json({ error: "You are not authorized to add employees." }, 403);
   }
 
-  // Caller is a verified, active partner from here on — failures may carry
+  // Caller is a verified, active partner from here on - failures may carry
   // the backend detail (unless HIDE_ERROR_DETAILS is set).
   // `reason` is a stable machine code (e.g. "duplicate_code") the bulk
   // import uses to tell a duplicate from a real failure; older callers
@@ -193,7 +193,7 @@ async function handle(req: Request, json: Json): Promise<Response> {
 
   // The employee joins the company chosen on the Add Employee form. Partners
   // manage every company of their organization (028_multi_company.sql), so
-  // any ACTIVE company of the caller's own organization is allowed — never
+  // any ACTIVE company of the caller's own organization is allowed - never
   // one from another organization. Older app builds send no companyId: the
   // employee then joins the caller's own company, as before.
   const requestedCompany = typeof body.companyId === "string" ? body.companyId.trim() : "";
@@ -260,7 +260,7 @@ async function handle(req: Request, json: Json): Promise<Response> {
   if (codeCheckErr) return fail(500, "Could not validate the employee code.", codeCheckErr);
   if (existingCode) return fail(409, "That employee code is already used.", undefined, "duplicate_code");
 
-  // Same person already on the team (matched by contact email) — say so
+  // Same person already on the team (matched by contact email) - say so
   // plainly rather than letting it surface as an auth or insert failure.
   const { data: existingEmail, error: emailCheckErr } = await admin
     .from("profiles")
@@ -304,8 +304,8 @@ async function handle(req: Request, json: Json): Promise<Response> {
       msg.includes("already exists")
     ) {
       // Deleting an employee removes their sign-in account (delete_employee,
-      // 039), so this account is still in use — by a current employee here or
-      // in another organization — and is never removed from here.
+      // 039), so this account is still in use - by a current employee here or
+      // in another organization - and is never removed from here.
       return fail(409, "A sign-in account with this email already exists and is still in use.", createErr, "duplicate_account");
     }
     if (code === "weak_password" || msg.includes("password")) {
@@ -356,7 +356,7 @@ async function handle(req: Request, json: Json): Promise<Response> {
     return fail(500, "Could not create the employee profile.", profileErr);
   }
 
-  // First salary record (CTC from the joining date) — part of creating the
+  // First salary record (CTC from the joining date) - part of creating the
   // employee. If it cannot be saved, undo the profile and the sign-in account
   // so a retry starts clean instead of hitting "already exists" on a
   // half-made employee.
@@ -390,7 +390,7 @@ async function handle(req: Request, json: Json): Promise<Response> {
 
   // Queue the "you have been added" email (sent by send-notifications). The
   // employee already exists at this point, so a queueing problem is only
-  // logged — it never fails the request.
+  // logged - it never fails the request.
   const { error: notifyErr } = await admin.rpc("notif_employee_invited", {
     p_profile: profile.id,
     p_actor: callerProfile.id,
@@ -398,7 +398,7 @@ async function handle(req: Request, json: Json): Promise<Response> {
   if (notifyErr) console.error("create-employee: welcome email not queued", describe(notifyErr));
 
   // The generated password goes back only to the verified partner who asked
-  // for it, over this response — it is never stored or logged.
+  // for it, over this response - it is never stored or logged.
   const out: Record<string, unknown> = { profile };
   if (withSalary) out.salary = salary;
   if (generated) out.password = password;

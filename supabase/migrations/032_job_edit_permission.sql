@@ -1,5 +1,5 @@
 -- ==============================================================================
--- 032: JOB CODE EDITING — SAME PERMISSION AS CREATING
+-- 032: JOB CODE EDITING - SAME PERMISSION AS CREATING
 -- ==============================================================================
 -- The app now lets a job code's details be edited (Job codes -> Edit). Editing
 -- follows the create rule from 030: Assistant Manager and above

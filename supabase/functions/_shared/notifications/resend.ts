@@ -21,7 +21,7 @@ const RESEND_URL = "https://api.resend.com/emails";
 
 /**
  * idempotencyKey: Resend drops a repeat of the same key (24h window), so a
- * retry after a timeout — where the first attempt may have been delivered —
+ * retry after a timeout - where the first attempt may have been delivered -
  * can never produce a second email.
  */
 export async function sendViaResend(message: ResendMessage, idempotencyKey: string): Promise<ResendResult> {
@@ -69,5 +69,5 @@ export async function sendViaResend(message: ResendMessage, idempotencyKey: stri
   // permanent and must not be retried.
   const transient = res.status === 429 || res.status === 409 || res.status >= 500;
   const detail = [payload.name, payload.message].filter(Boolean).join(": ").slice(0, 400);
-  return { ok: false, transient, status: res.status, error: `Resend ${res.status}${detail ? ` — ${detail}` : ""}` };
+  return { ok: false, transient, status: res.status, error: `Resend ${res.status}${detail ? ` - ${detail}` : ""}` };
 }

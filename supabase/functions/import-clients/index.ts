@@ -2,7 +2,7 @@
 //
 // Server-side validation and insert for the bulk "Import Clients" screen.
 // Every row is checked against the same rules as the Add Client form
-// (saveClient() in index.html), then inserted with the CALLER'S OWN JWT —
+// (saveClient() in index.html), then inserted with the CALLER'S OWN JWT -
 // so RLS (clients_insert: organization, company scope and, from 036, Assistant Manager
 // rank) applies exactly as it does to the Add Client form. The service-role
 // key is used for one read only: looking up which client codes / PANs are
@@ -13,7 +13,7 @@
 // Request:  POST { rows: ClientRow[], dryRun?: boolean, onboardedDate?: "YYYY-MM-DD" }
 // Response: { results: [{ row, status: "ready"|"imported"|"duplicate"|"failed",
 //                         reason?, warnings?, client? }] }
-//   dryRun: validate only — status "ready" instead of inserting.
+//   dryRun: validate only - status "ready" instead of inserting.
 //
 // Retries are safe: a client code that already exists is reported as
 // "duplicate" and never inserted twice (also backed by uq_org_client_code).
@@ -27,7 +27,7 @@ declare const Deno: {
 };
 
 // Mirrors RANK / CAN.manageClients() in index.html and auth_rank() (030).
-// Adding clients: Assistant Manager and above — MANAGER_RANK in index.html,
+// Adding clients: Assistant Manager and above - MANAGER_RANK in index.html,
 // clients_insert in 036 (Assistant Managers have the Manager permissions).
 const RANK: Record<string, number> = {
   partner: 90, manager: 70, assistant_manager: 60, senior_executive: 50, accounts: 40,
@@ -40,7 +40,7 @@ const MANAGE_CLIENTS_RANK = 60;
 const DEFAULT_TYPE = "Private Ltd";
 export const MAX_TYPE_LENGTH = 100;
 
-const MAX_ROWS = 200; // per request — the browser sends larger files in chunks
+const MAX_ROWS = 200; // per request - the browser sends larger files in chunks
 const CODE_RE = /^[A-Z0-9]{2,8}$/;
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -215,8 +215,8 @@ async function handle(req: Request, json: Json): Promise<Response> {
   }
 
   // Relationship partner: any active employee the caller can see (profiles
-  // RLS keeps company scope), of any designation — the same people the Add
-  // Client form's dropdown offers — matched by employee code. It marks who
+  // RLS keeps company scope), of any designation - the same people the Add
+  // Client form's dropdown offers - matched by employee code. It marks who
   // handles the client and grants no access.
   const partnerCodes = [...new Set(valid.map((v) => v.partnerCode))];
   const partners = new Map<string, string>();
@@ -267,7 +267,7 @@ async function handle(req: Request, json: Json): Promise<Response> {
     if (!partnerId) {
       results.push({
         row: v.row, status: "failed",
-        reason: `Relationship partner ${v.partnerCode} was not found — use the employee code of an active employee`,
+        reason: `Relationship partner ${v.partnerCode} was not found - use the employee code of an active employee`,
       });
       continue;
     }
@@ -299,7 +299,7 @@ async function handle(req: Request, json: Json): Promise<Response> {
         console.error("import-clients: insert failed", describe(insErr));
         results.push({
           row: v.row, status: "failed",
-          reason: "Could not add the client" + (HIDE_ERROR_DETAILS ? "" : " — " + (insErr.message || "database error")),
+          reason: "Could not add the client" + (HIDE_ERROR_DETAILS ? "" : " - " + (insErr.message || "database error")),
         });
       }
       continue;

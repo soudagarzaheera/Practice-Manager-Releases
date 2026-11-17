@@ -2,12 +2,12 @@
 -- 033: PERSONAL EVENTS (My calendar)
 -- ==============================================================================
 -- A personal event belongs to the Supabase Auth login that created it and is
--- visible to nobody else — not a supervisor, not a partner, not another
+-- visible to nobody else - not a supervisor, not a partner, not another
 -- company. Privacy is enforced here by RLS, not by the app:
 --   * user_id defaults to auth.uid(); the app never sends it, and the INSERT
 --     check rejects any other value sent through the API directly.
---   * Every policy is user_id = auth.uid() alone — no organization, company,
---     role or auth_rank() exception — so elevated roles get no extra access.
+--   * Every policy is user_id = auth.uid() alone - no organization, company,
+--     role or auth_rank() exception - so elevated roles get no extra access.
 --   * UPDATE checks ownership on the existing row (USING) and on the resulting
 --     row (WITH CHECK), so ownership can never be transferred.
 --   * anon has no privileges. No shared helper, report, notification trigger

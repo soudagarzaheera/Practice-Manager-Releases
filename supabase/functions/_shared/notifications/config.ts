@@ -1,6 +1,6 @@
 // Server-side configuration for application notification emails.
 //
-// Every value comes from Supabase Edge Function secrets — none of these are
+// Every value comes from Supabase Edge Function secrets - none of these are
 // ever sent to, or readable by, a browser/mobile/desktop client.
 //
 //   RESEND_API_KEY                 required to send (already set on the project)
@@ -9,7 +9,7 @@
 //   NOTIFICATION_REPLY_TO          optional reply-to address
 //   NOTIFICATION_APP_NAME          optional, shown in the header/footer (default "Task Manager")
 //   APP_BASE_URL                   optional deep/universal link base, e.g. https://app.fynalliance.com
-//                                  — when unset, emails are sent without buttons
+//                                  - when unset, emails are sent without buttons
 //   NOTIFICATIONS_DISPATCH_SECRET  required; shared with pg_cron (Vault) to call the dispatcher
 //   NOTIFICATIONS_DRY_RUN          "true" = render and log, never call Resend
 

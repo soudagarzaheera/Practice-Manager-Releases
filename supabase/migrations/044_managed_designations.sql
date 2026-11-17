@@ -4,13 +4,13 @@
 -- Until now a designation WAS profiles.role: a fixed list of 7 that is also
 -- the permission level (auth_rank(), profile_rank(), every RLS policy and
 -- every role = 'partner' check). Firms want their own titles ("Audit
--- Executive", "Senior Manager — Tax", …) without touching permissions.
+-- Executive", "Senior Manager - Tax", …) without touching permissions.
 --
 -- designations (one list per organization)
---   name         — the title shown for the employee (unique per organization)
---   access_role  — one of the 7 permission levels; what the employee can do.
+--   name         - the title shown for the employee (unique per organization)
+--   access_role  - one of the 7 permission levels; what the employee can do.
 --                  Fixed once created (create a new designation instead).
---   is_builtin   — the 7 existing designations, seeded for every organization
+--   is_builtin   - the 7 existing designations, seeded for every organization
 --                  under their current names; read-only.
 --   is_active / sort_order
 --
@@ -27,12 +27,12 @@
 --
 -- Who manages the list (RLS + guard, mirrored by CAN.manageDesignations /
 -- CAN.editDesignation in index.html):
---   read                    — every member of the organization
+--   read                    - every member of the organization
 --   add / rename / reorder / (de)activate / delete
---                           — Partner, Manager, Assistant Manager
+--                           - Partner, Manager, Assistant Manager
 --                             (auth_rank() >= 60); a non-partner only for
 --                             access levels BELOW their own; never a built-in
---   delete                  — only while no employee (including deleted ones,
+--   delete                  - only while no employee (including deleted ones,
 --                             whose history is kept) has it
 -- Assigning a designation to an employee is unchanged: Partners only
 -- (profiles_update, 003/028).
@@ -150,7 +150,7 @@ BEGIN
       RAISE EXCEPTION 'That designation does not belong to this organization.' USING ERRCODE = '23503';
     END IF;
     IF NOT v_d.is_active THEN
-      RAISE EXCEPTION 'The designation "%" is inactive — choose an active designation.', v_d.name USING ERRCODE = '22023';
+      RAISE EXCEPTION 'The designation "%" is inactive - choose an active designation.', v_d.name USING ERRCODE = '22023';
     END IF;
     NEW.role := v_d.access_role;                 -- the designation decides the permission level
   ELSIF TG_OP = 'INSERT' OR NEW.role IS DISTINCT FROM OLD.role THEN
@@ -205,7 +205,7 @@ BEGIN
     SELECT count(*) INTO n FROM profiles
      WHERE organization_id = OLD.organization_id AND designation_id = OLD.id;
     IF n > 0 THEN
-      RAISE EXCEPTION '"%" is used by % employee(s) — deactivate it instead.', OLD.name, n USING ERRCODE = '23503';
+      RAISE EXCEPTION '"%" is used by % employee(s) - deactivate it instead.', OLD.name, n USING ERRCODE = '23503';
     END IF;
     RETURN OLD;
   END IF;
@@ -219,7 +219,7 @@ BEGIN
   END IF;
   IF auth.uid() IS NOT NULL THEN
     IF NEW.access_role IS DISTINCT FROM OLD.access_role THEN
-      RAISE EXCEPTION 'A designation''s access level cannot be changed — create a new designation instead.'
+      RAISE EXCEPTION 'A designation''s access level cannot be changed - create a new designation instead.'
         USING ERRCODE = '42501';
     END IF;
     IF NEW.is_builtin IS DISTINCT FROM OLD.is_builtin OR NEW.organization_id IS DISTINCT FROM OLD.organization_id THEN

@@ -1,6 +1,6 @@
 /* Saving generated files (Excel exports, payslip PDFs) in the mobile app.
  *
- * Browser and Electron desktop keep their existing download behaviour — the
+ * Browser and Electron desktop keep their existing download behaviour - the
  * callers only route here when isNativeApp() is true, because Android's
  * WebView silently ignores <a download> / blob: links and jsPDF's doc.save().
  *
@@ -71,13 +71,13 @@ async function saveToDocuments(name, base64) {
 function friendlyError(e) {
   const msg = String((e && e.message) || e || '');
   if (/space|ENOSPC|full/i.test(msg)) return 'there is not enough free storage on this phone';
-  if (/permission|denied|EACCES/i.test(msg)) return 'storage access was denied — allow it in Android Settings → Apps → Practice Manager';
+  if (/permission|denied|EACCES/i.test(msg)) return 'storage access was denied - allow it in Android Settings → Apps → Practice Manager';
   return msg || 'unknown error';
 }
 
 /**
  * Save a generated file on the phone and offer it through the share sheet.
- * Never throws — failures are reported to the user with a toast.
+ * Never throws - failures are reported to the user with a toast.
  * @returns {Promise<boolean>} true if the file was written.
  */
 export async function saveNativeFile(filename, data, mimeType) {
@@ -90,12 +90,12 @@ export async function saveNativeFile(filename, data, mimeType) {
     })).uri;
   } catch (e) {
     console.error('[fileSave] write failed', e);
-    say('Could not save ' + name + ' — ' + friendlyError(e));
+    say('Could not save ' + name + ' - ' + friendlyError(e));
     return false;
   }
 
   const docUri = await saveToDocuments(name, base64);
-  say(docUri ? 'Saved to Documents/' + DOCS_FOLDER + '/' + name : 'File ready — choose where to open or save it');
+  say(docUri ? 'Saved to Documents/' + DOCS_FOLDER + '/' + name : 'File ready - choose where to open or save it');
 
   try {
     await Share.share({
@@ -108,8 +108,8 @@ export async function saveNativeFile(filename, data, mimeType) {
     if (/cancel/i.test(msg)) return true;                // user closed the share sheet
     console.error('[fileSave] share failed', e, mimeType);
     say(docUri
-      ? 'Saved to Documents/' + DOCS_FOLDER + ' — open it from your Files app'
-      : 'Could not open the share options for ' + name + ' — ' + friendlyError(e));
+      ? 'Saved to Documents/' + DOCS_FOLDER + ' - open it from your Files app'
+      : 'Could not open the share options for ' + name + ' - ' + friendlyError(e));
   }
   return true;
 }

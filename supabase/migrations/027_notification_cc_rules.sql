@@ -4,8 +4,8 @@
 -- Fixes emails arriving with no CC. Two defects in 026:
 --
 --   1. notif_enqueue() always removed the actor from CC. For a task
---      assignment the actor IS the assigning Manager/Partner — exactly the
---      person the CC is meant for — so in a company where the assigner is also
+--      assignment the actor IS the assigning Manager/Partner - exactly the
+--      person the CC is meant for - so in a company where the assigner is also
 --      the employee's supervisor and the job opener, every CC candidate was
 --      removed and the CC list was empty.
 --   2. leave_requested and budget_requested put the supervisor AND the
@@ -18,16 +18,16 @@
 --                     CC = assigner (even though they acted), assignee's
 --                          supervisor, job opener if manager+ AND same company
 --   leave_requested   To = direct supervisor (manager/senior/partner)
---                          — or the company's partners if there is none
+--                          - or the company's partners if there is none
 --                     CC = partners of the employee's SAME company
 --   budget_requested  To = direct supervisor if manager+
---                          — or the company's partners if there is none
+--                          - or the company's partners if there is none
 --                     CC = partners of the SAME company, plus the job opener
 --                          if manager+ and same company
 -- Everything else (leave/budget/timesheet decisions, timesheet submitted,
 -- employee status, reminders, summaries) is unchanged.
 --
--- No table, column or trigger definition changes — function bodies only.
+-- No table, column or trigger definition changes - function bodies only.
 -- CC never includes a To recipient, and never crosses organization_id; the
 -- partner fan-out never crosses company_id. Safe to re-run.
 -- ==============================================================================

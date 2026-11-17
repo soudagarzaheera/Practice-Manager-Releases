@@ -4,7 +4,7 @@
 -- Decisions (approved 2026-11-09):
 --   * From 2026-11-01 (optional_days_rule_from()) every Saturday and every
 --     declared holiday is an OPTIONAL working day. Punching is allowed (it
---     always was — nothing here blocks it). Not working is never an absence;
+--     always was - nothing here blocks it). Not working is never an absence;
 --     working counts as Present. Sundays keep the weekly-off rule unchanged.
 --     Dates before 2026-11-01 keep the old rules (2nd/4th Saturday holiday,
 --     other Saturdays mandatory) so past payroll does not change.
@@ -74,7 +74,7 @@ COMMENT ON COLUMN earned_leave_transactions.reason IS
 
 -- 3. Posting a credit ----------------------------------------------------------
 -- Returns true when a new credit row was written (false: not qualifying, or
--- already credited for that date — the UNIQUE key makes this idempotent).
+-- already credited for that date - the UNIQUE key makes this idempotent).
 CREATE OR REPLACE FUNCTION credit_extra_work_day(
   p_org UUID, p_profile UUID, p_date DATE, p_source_type TEXT, p_source_id UUID)
 RETURNS BOOLEAN
@@ -219,7 +219,7 @@ BEGIN
   IF EXISTS (SELECT 1 FROM timesheet_entries te
              WHERE te.organization_id = r.organization_id AND te.profile_id = r.profile_id
                AND te.entry_date = r.work_date AND te.status IN ('pending', 'approved')) THEN
-    RAISE EXCEPTION 'Time for % is already submitted — its half-day setting can no longer change.', r.work_date
+    RAISE EXCEPTION 'Time for % is already submitted - its half-day setting can no longer change.', r.work_date
       USING ERRCODE = '42501';
   END IF;
   RETURN r;
@@ -256,8 +256,8 @@ BEGIN
   v_min := CASE WHEN v_half THEN 4 ELSE 8 END;
   IF v_total < v_min THEN
     RAISE EXCEPTION '%', CASE WHEN v_half
-      THEN format('%s has %s hours — a half day needs at least 4 hours.', to_char(NEW.entry_date, 'Dy DD Mon YYYY'), trim_scale(v_total))
-      ELSE format('%s has %s hours — a full day needs at least 8 hours. Mark it as a half day if you worked half a day (minimum 4 hours).',
+      THEN format('%s has %s hours - a half day needs at least 4 hours.', to_char(NEW.entry_date, 'Dy DD Mon YYYY'), trim_scale(v_total))
+      ELSE format('%s has %s hours - a full day needs at least 8 hours. Mark it as a half day if you worked half a day (minimum 4 hours).',
                   to_char(NEW.entry_date, 'Dy DD Mon YYYY'), trim_scale(v_total)) END
       USING ERRCODE = '23514';
   END IF;

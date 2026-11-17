@@ -3,7 +3,7 @@
 -- ==============================================================================
 -- Refines 023. The hard limit (booked + new hours <= budgeted + approved
 -- additional) now applies to every role EXCEPT an active partner booking
--- their own time — the entry's profile, not whoever runs the statement, is
+-- their own time - the entry's profile, not whoever runs the statement, is
 -- what counts, so nobody else can book "as" a partner to get around it.
 -- Partner hours still count toward the job's booked total, so they use up
 -- the budget for everyone else. Budgets and existing entries are unchanged.

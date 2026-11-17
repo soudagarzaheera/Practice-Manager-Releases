@@ -7,20 +7,20 @@
 -- the caller's own org via auth_org_id(), which resolves by looking up
 -- profiles.organization_id WHERE auth_user_id = auth.uid(). That is correct
 -- for an already-linked user, but for a Supabase Auth session that has no
--- matching `profiles` row yet (auth_user_id never set — e.g. an existing
+-- matching `profiles` row yet (auth_user_id never set - e.g. an existing
 -- employee profile created before this auth integration, or literally the
 -- first person ever to sign in for real), auth_org_id() returns NULL. Every
 -- RLS policy built on it then hides everything, including the organization
 -- row that may perfectly well exist. The client's loadAppData() queried
 -- `organizations` FIRST, saw zero rows because of that RLS gap, and reported
--- the misleading "No organization is set up in Supabase yet." — a message
+-- the misleading "No organization is set up in Supabase yet." - a message
 -- that is only true for a genuinely empty database, not an unlinked session.
 --
 -- Fix: give the client a reliable, narrowly-scoped way to answer "is MY
 -- session linked to a profile?" *before* it ever asks "what's in the
--- organizations table" — so it can tell an unlinked account (Case C — needs
+-- organizations table" - so it can tell an unlinked account (Case C - needs
 -- an administrator to add them as an employee) apart from a truly fresh,
--- empty install (Case B — offer one-time organization setup).
+-- empty install (Case B - offer one-time organization setup).
 -- ==============================================================================
 
 -- ---- my_profile(): the caller's own profile row, independent of org RLS ------
@@ -38,7 +38,7 @@ GRANT EXECUTE ON FUNCTION my_profile() TO authenticated;
 -- ---- system_needs_bootstrap(): true only for a genuinely empty install -------
 -- Existence-only check (no row contents leak), used purely to decide whether
 -- to offer the one-time "set up your organization" screen. Once a single
--- organization or profile exists anywhere, this is permanently false — after
+-- organization or profile exists anywhere, this is permanently false - after
 -- that, new people can only join through an administrator's Add Employee.
 CREATE OR REPLACE FUNCTION system_needs_bootstrap()
 RETURNS boolean
@@ -54,7 +54,7 @@ GRANT EXECUTE ON FUNCTION system_needs_bootstrap() TO authenticated;
 -- only when the system is still empty (re-checked here, not just trusted from
 -- a prior system_needs_bootstrap() call, to close the race). This is the only
 -- path that ever lets an authenticated-but-unlinked user create a profile for
--- themselves — every other employee is created by an existing partner via the
+-- themselves - every other employee is created by an existing partner via the
 -- create-employee Edge Function, never by this function.
 CREATE OR REPLACE FUNCTION bootstrap_first_admin(
   org_name text, admin_full_name text, admin_employee_code text
