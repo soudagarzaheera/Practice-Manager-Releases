@@ -392,6 +392,12 @@ This document provides the architectural reference and schema specifications for
 * **Not changed**: timesheets (separate audit), leaves, claims / payments, approvals (`reports_to`), Balanced Leave, partner-only functions.
 * **App**: "Team today" (Attendance) for Assistant Manager and above only, listing Partners everyone and Assistant Managers / Managers only the people working under them (`supervisesProfile()`, mirrors `auth_supervises()`).
 
+### 30. Payslip earnings & deductions *(`052_payslip_components.sql`)*
+* **`employee_payslip_components`**: one row per employee per month (`salary_month` = first of the month, UNIQUE with `profile_id`). Earnings `basic`, `sa`, `la`, `ca`, `hra`; deductions `tds`, `pf`, `pt`, `other_deductions` + `other_deduction_remark`; optional `payment_date`. Each amount is NULL (blank) or >= 0; `other_deductions > 0` requires a non-blank remark (CHECK).
+* **No payroll rules**: every amount is typed in by a Partner. The app only adds the earnings (Total Earnings), adds the deductions (Total Deductions) and subtracts (Net Salary).
+* **Access (RLS)**: Partners read/write their organization's rows; everyone else reads only their own rows.
+* **App**: Salary page - "Enter / Edit amounts" per employee (dialog with live totals; "Remove amounts" reverts). Payslip (screen and PDF) is black and white with Employee details, Earnings, Deductions (with the Other Deductions remark), Net Salary, amount in words and an attendance summary. A month with no row keeps the existing attendance-based payslip, so earlier payslips are unchanged. `salaryCalculation()` and the Salary table figures are not changed.
+
 ## 3. Security, Multi-Tenancy & Delete Integrity Principles
 
 1. **Multi-Tenant Composite Keys**:
