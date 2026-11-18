@@ -2285,9 +2285,27 @@ function canSeeLeaveRequest(viewerId, r){
   return false;
 }
 
+/* Timesheets waiting for this approver: one item per person per week that
+   has at least one pending (submitted, undecided) entry - from any week, not
+   only the current one, and even if the person has since added new drafts to
+   that week. Oldest week first. Returns [{p, week}]. */
 function pendingSheets(){
-  return staff().filter(p=>CAN.approveSheet(p.id) && sheetStatus(p.id)==="submitted");
+  const out=[];
+  staff().forEach(p=>{
+    if(!CAN.approveSheet(p.id)) return;
+    const weeks=new Set(ENTRIES.filter(x=>x.who===p.id && x.status==="pending").map(x=>x.week));
+    [...weeks].forEach(week=>out.push({p, week}));
+  });
+  return out.sort((a,b)=>a.week<b.week?-1:a.week>b.week?1:a.p.name.localeCompare(b.p.name));
 }
+/* The job-code lines an approver sees for one week: submitted entries only -
+   drafts are still the employee's and cannot be decided. */
+const approvalGroupsFor = (who, week) => groupsFor(who, week).map(g=>{
+  const rows=g.rows.filter(r=>r.status!=="draft");
+  if(!rows.length) return null;
+  const sts=[...new Set(rows.map(r=>r.status))];
+  return { ...g, rows, hours:sum(rows.map(r=>+r.hours||0)), status: sts.length===1 ? sts[0] : "mixed" };
+}).filter(Boolean);
 function pendingBudgets(){ return BUDGET_REQUESTS.filter(b=>b.status==="pending" && CAN.approveBudget(b)); }
 function pendingClaims(){
   return CLAIMS.filter(c=>c.status==="submitted" && CAN.approveClaim(c))
@@ -3697,17 +3715,22 @@ function renderPendingApprovals(){
     h += '<div class="card"><div class="card-head"><h2>Timesheets</h2><span class="spacer"></span>'+
       '<span class="eyebrow">approve or query one job code at a time</span></div>';
     if(!sheets.length){
-      h += '<div class="empty">No timesheets waiting. Switch to a person who reports to you, submit their week, then come back.</div>';
+      h += '<div class="empty">No timesheets waiting for your approval.</div>';
     } else {
-      h += sheets.map(p=>{
-        const booked=bookedFor(p.id);
-        const gs=groupsFor(p.id);
+      h += sheets.map(({p, week})=>{
+        const gs=approvalGroupsFor(p.id, week);
+        const booked=sum(gs.map(g=>g.hours));
+        const drafts=entriesFor(p.id, week).filter(r=>r.status==="draft").length;
         return '<div class="sheet"><div class="sheet-head">'+
           '<span class="strong">'+esc(p.name)+'</span><span class="code">'+p.label+'</span>'+
+          '<span class="tag'+(week<WEEK?' warn':'')+'">Week '+fmtShort(week)+' – '+fmtShort(addDays(week,5))+(week<WEEK?' · earlier week':'')+'</span>'+
           '<span class="spacer" style="flex:1"></span>'+
           '<span class="num">'+hrs(booked)+'h</span>'+
-          '<span class="tiny muted">booked</span>'+
-          '</div><div class="sheet-body">'+
+          '<span class="tiny muted">submitted</span>'+
+          '</div>'+
+          (drafts?'<p class="tiny muted" style="margin:6px 0 0">'+esc(p.name.split(" ")[0])+' also has '+drafts+' draft entr'+(drafts===1?'y':'ies')+
+            ' in this week that '+(drafts===1?'is':'are')+' not submitted yet - not shown here.</p>':'')+
+          '<div class="sheet-body">'+
           gs.map(g=>{
             const cls = g.status==="approved"?"approved":g.status==="queried"?"queried":"pending";
             const done = g.status==="approved"||g.status==="queried";
@@ -3719,9 +3742,9 @@ function renderPendingApprovals(){
               '<span class="line-acts">'+
                 (done
                   ? '<span class="tag '+(g.status==="approved"?"ok":"bad")+'">'+g.status+'</span>'+
-                    '<button class="btn ghost sm" onclick="undoLine(\''+p.id+'\',\''+g.job+'\')">Undo</button>'
-                  : '<button class="btn sm" onclick="decideLine(\''+p.id+'\',\''+g.job+'\',true)">Approve</button>'+
-                    '<button class="btn ghost sm" onclick="queryLine(\''+p.id+'\',\''+g.job+'\')">Query</button>')+
+                    '<button class="btn ghost sm" onclick="undoLine(\''+p.id+'\',\''+g.job+'\',\''+week+'\')">Undo</button>'
+                  : '<button class="btn sm" onclick="decideLine(\''+p.id+'\',\''+g.job+'\',true,\'\',\''+week+'\')">Approve</button>'+
+                    '<button class="btn ghost sm" onclick="queryLine(\''+p.id+'\',\''+g.job+'\',\''+week+'\')">Query</button>')+
               '</span></div>'+
               '<div class="line-days">'+g.rows.map(r=>
                 '<div class="line-day"><span class="d">'+weekdayDate(dateOf(r))+'</span>'+
@@ -5162,8 +5185,9 @@ async function reloadLinkedTasks(rows){
 }
 
 /* per job code, not per week */
-async function decideLine(who, jid, ok, note){
-  const rows = ENTRIES.filter(x=>x.who===who && x.week===WEEK && x.job===jid && x.status==="pending");
+async function decideLine(who, jid, ok, note, week=WEEK){
+  const rows = ENTRIES.filter(x=>x.who===who && x.week===week && x.job===jid && x.status==="pending");
+  if(!rows.length) return render();
   const nextStatus = ok?"approved":"queried", nextQuery = ok?"":(note||"");
   const decidedAt = new Date().toISOString();
   const { error } = await supabase.from("timesheet_entries")
@@ -5174,22 +5198,23 @@ async function decideLine(who, jid, ok, note){
   toast((ok?"Approved ":"Queried ")+job(jid).code+" - "+person(who).name.split(" ")[0]);
   render();
 }
-function queryLine(who, jid){
+function queryLine(who, jid, week=WEEK){
   modal('<h3>Query '+esc(job(jid).code)+'</h3>'+
     '<p class="tiny muted" style="margin-bottom:12px">Only this job code goes back. Anything you have already '+
     'approved on '+esc(person(who).name)+'\'s week stays approved.</p>'+
     '<label class="field"><span>What needs changing</span>'+
     '<textarea id="qlNote" rows="3" placeholder="6h on clause 44 looks high against the 2h estimate - please split by annexure."></textarea></label>'+
     '<div class="row"><button class="btn ghost" onclick="closeModal()">Cancel</button>'+
-    '<button class="btn danger" onclick="doQuery(\''+who+'\',\''+jid+'\')">Send back</button></div>');
+    '<button class="btn danger" onclick="doQuery(\''+who+'\',\''+jid+'\',\''+week+'\')">Send back</button></div>');
 }
-function doQuery(who,jid){
+function doQuery(who,jid,week=WEEK){
   const n=$("#qlNote").value.trim();
   if(n.length<10) return toast("Give a reason of at least 10 characters");
-  closeModal(); decideLine(who,jid,false,n);
+  closeModal(); decideLine(who,jid,false,n,week);
 }
-async function undoLine(who,jid){
-  const rows = ENTRIES.filter(x=>x.who===who && x.week===WEEK && x.job===jid && x.status!=="draft");
+async function undoLine(who,jid,week=WEEK){
+  const rows = ENTRIES.filter(x=>x.who===who && x.week===week && x.job===jid && x.status!=="draft");
+  if(!rows.length) return render();
   const { error } = await supabase.from("timesheet_entries")
     .update({ status:"pending", query_reason:"", decided_by:null, decided_at:null }).in("id", rows.map(r=>r.id));
   if(error) return toast("Could not undo - "+error.message);
