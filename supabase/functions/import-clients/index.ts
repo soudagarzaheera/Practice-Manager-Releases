@@ -6,9 +6,13 @@
 // so RLS (clients_insert: organization, company scope and, from 036, Assistant Manager
 // rank) applies exactly as it does to the Add Client form. The service-role
 // key is used for one read only: looking up which client codes / PANs are
-// already taken anywhere in the organization, because client codes are
-// unique organization-wide but a Manager can only see their own company's
-// clients. No client data from that lookup is returned to the caller.
+// already taken anywhere in the organization (client codes are unique
+// organization-wide). Since 053 every member of the organization can read all
+// of its clients, so this lookup matches what the caller sees; it stays
+// server-side so the check never depends on what the browser has loaded.
+// Imported clients are recorded under the importer's company but shared with
+// every company of the organization (053). No client data from that lookup is
+// returned to the caller.
 //
 // Request:  POST { rows: ClientRow[], dryRun?: boolean, onboardedDate?: "YYYY-MM-DD" }
 // Response: { results: [{ row, status: "ready"|"imported"|"duplicate"|"failed",

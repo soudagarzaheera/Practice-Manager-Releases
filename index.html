@@ -463,18 +463,12 @@ button.sd-main:hover{background:var(--blue-wash)}
 .svc-add{color:var(--ink-2);font-size:12px;font-weight:500;padding:3px 0;text-decoration:underline;text-underline-offset:2px}
 .svc-new{margin-top:6px;padding:10px;border:1px solid var(--rule);border-radius:var(--r);background:var(--rule-2)}
 .svc-new .row{margin-top:8px}
-/* Recurring job code (048): due-date rules + preview */
-.rec-box{margin:0 0 11px;padding:12px;border:1px solid var(--rule);border-radius:var(--r);background:var(--blue-wash)}
-.rec-rule{display:grid;grid-template-columns:110px 1fr;gap:6px 10px;align-items:center;margin-top:8px}
-.rec-rule > .rec-k{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
-.rec-inline{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:13px}
-.rec-inline input[type=number]{width:64px}
-.rec-inline select{width:auto;max-width:100%}
-.rec-prev{width:100%;margin-top:10px;font-size:12.5px;border-collapse:collapse}
-.rec-prev th{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:400;text-align:left;padding:3px 6px 3px 0}
-.rec-prev td{padding:3px 6px 3px 0;border-top:1px solid var(--rule)}
-.rec-prev tr.now td{font-weight:500}
-@media (max-width:560px){ .rec-rule{grid-template-columns:1fr} }
+/* Job code form: Repeat (054) */
+.rep-end{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.rep-end select{width:auto}
+.rep-end input[type=number]{width:72px}
+.rep-end input[type=date]{width:auto;flex:1;min-width:140px}
+.rep-end [hidden]{display:none}
 
 /* ---------- feedback drawer ---------- */
 #fbToggle{
@@ -929,13 +923,15 @@ async function loadAppData(orgId, currentProfileId){
   // Before 031 is applied the column is absent: treat as set up (no redirect).
   FIRM.setupComplete = !("setup_completed_at" in org) || !!org.setup_completed_at;
 
-  // Recurring job codes (048): close any period that has ended and raise its
-  // next period before the jobs are read. The same runs hourly from pg_cron;
-  // this only makes it immediate. Non-fatal (e.g. before 048 is applied).
+  // Scheduled job codes (054): raise the job for any scheduled date now due
+  // before the jobs are read. The same runs hourly from pg_cron; this only
+  // makes it immediate. Non-fatal (e.g. before 054 is applied).
   {
-    const { error: rollErr } = await supabase.rpc("roll_recurring_jobs");
-    if(rollErr) console.warn("[DATA] recurring job rollover skipped -", rollErr.message);
+    const { error: genErr } = await supabase.rpc("generate_scheduled_jobs");
+    if(genErr) console.warn("[DATA] scheduled job generation skipped -", genErr.message);
   }
+  // Job code schedules (054) load on their own so the app still opens before 054 is applied.
+  const schedulesP = supabase.from("job_schedules").select("*").eq("organization_id", ORG_ID);
   // Half-day marks (045) load on their own so the app still opens before 045 is applied.
   const halfDaysP = supabase.from("timesheet_half_days").select("profile_id,work_date").eq("organization_id", ORG_ID);
   const [profilesR, companiesR, clientsR, locationsR, jobsR, tasksR, partnerTaskAssignmentsR, entriesR, holidaysR, holidayWorkedR, leavesR,
@@ -1012,7 +1008,7 @@ async function loadAppData(orgId, currentProfileId){
     service:j.service_category||"", period:j.period_fy||"",
     // Responsible Partner of this job (042) - not the client's Relationship Partner.
     partner:j.responsible_partner_id||null,
-    ...jobRecurrenceFields(j)
+    ...jobScheduleFields(j)
   }));
 
   PARTNER_TASK_ASSIGNMENTS = partnerTaskAssignmentsR.data.map(a=>({
@@ -1109,6 +1105,10 @@ async function loadAppData(orgId, currentProfileId){
   const halfDaysR = await halfDaysP;
   if(halfDaysR.error){ HALF_DAYS = []; console.warn("[DATA] timesheet_half_days unavailable - run 045_optional_days_and_timesheet_minimum.sql", halfDaysR.error.message); }
   else HALF_DAYS = halfDaysR.data.map(h=>({ who:h.profile_id, date:h.work_date }));
+  const schedulesR = await schedulesP;
+  SCHEDULES = {};
+  if(schedulesR.error) console.warn("[DATA] job_schedules unavailable - run 054_job_schedules.sql", schedulesR.error.message);
+  else schedulesR.data.forEach(r=>{ SCHEDULES[r.id] = scheduleFromRow(r); });
   await loadAttendanceOverrides();
   await loadBalancedLeave();
 
@@ -1614,102 +1614,99 @@ function monthLabel(ym){ const [y,m]=ym.split("-");
   return ["January","February","March","April","May","June","July","August","September","October","November","December"][+m-1]+" "+y; }
 function daysTo(d){ return Math.round((new Date(d+"T00:00:00")-new Date(TODAY+"T00:00:00"))/864e5); }
 
-/* ---- Recurring job codes (048) ----------------------------------------------
-   Same rules as the database (job_period_end / job_rule_day / job_period_label,
-   048_recurring_jobs.sql), which re-derives the dates on save - keep in step.
-   Periods are calendar periods starting on the 1st of a month; due dates are
-   "day N of the month <offset> months after the period's last month", so they
-   never drift. A day the month does not have becomes its last day. */
-const FREQUENCIES = [
-  { code:"one_time",    label:"One-time",    months:0,  noun:"" },
-  { code:"monthly",     label:"Monthly",     months:1,  noun:"month" },
-  { code:"quarterly",   label:"Quarterly",   months:3,  noun:"quarter" },
-  { code:"half_yearly", label:"Half-yearly", months:6,  noun:"half-year" },
-  { code:"yearly",      label:"Yearly",      months:12, noun:"year" }
+/* ---- Job code schedules (054) -------------------------------------------------
+   A job code repeats from its due dates (Repeat on the job code form): single dates (extras),
+   optionally a repeat - daily / weekly / monthly / yearly, every N, ending on a
+   date, after N dates or never - minus repeat dates the user deleted (skipped).
+   Each date gets its own job with the same job code; the database raises the
+   job for the next date (generate_scheduled_jobs). Same date rules as
+   job_schedule_occurrence / job_schedule_next in 054_job_schedules.sql - keep
+   in step. Months and years count from the start date, so they never drift; a
+   day the month does not have becomes its last day (31st -> 30 Apr). */
+const REPEATS = [
+  { code:"none",    label:"Does not repeat", unit:"" },
+  { code:"daily",   label:"Daily",   unit:"day" },
+  { code:"weekly",  label:"Weekly",  unit:"week" },
+  { code:"monthly", label:"Monthly", unit:"month" },
+  { code:"yearly",  label:"Yearly",  unit:"year" }
 ];
-const freqInfo = f => FREQUENCIES.find(x=>x.code===f) || FREQUENCIES[0];
-const isRecurring = j => !!j && freqInfo(j.frequency).months>0;
-const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const repeatInfo = r => REPEATS.find(x=>x.code===r) || REPEATS[0];
+let SCHEDULES = {};   // job_schedules by id (054); stays empty before 054 is applied
+function scheduleFromRow(r){
+  return { id:r.id, repeat:r.repeat||"none", interval:+r.repeat_interval||1, start:r.repeat_start||null,
+    until:r.repeat_until||null, count:r.repeat_count??null, statOffset:r.statutory_offset_days??null,
+    extras:[...(r.extra_dates||[])].sort(), skipped:[...(r.skipped_dates||[])].sort() };
+}
+/* The k-th repeat date (k = 0 is the start). */
+function scheduleOccurrence(start, repeat, n, k){
+  if(repeat==="daily")  return addDays(start, k*n);
+  if(repeat==="weekly") return addDays(start, 7*k*n);
+  const months = (repeat==="yearly" ? 12 : 1)*k*n;
+  const [y,m,d] = start.split("-").map(Number);
+  const first = new Date(Date.UTC(y, m-1+months, 1));
+  const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth()+1, 0)).getUTCDate();
+  return first.toISOString().slice(0,8)+String(Math.min(d, last)).padStart(2,"0");
+}
 /* The 1st of the month n calendar months after date d's month. */
 function monthStartPlus(d, n){
   const [y,m] = d.split("-").map(Number);
   return new Date(Date.UTC(y, m-1+n, 1)).toISOString().slice(0,10);
 }
-function periodEndOf(start, f){ return addDays(monthStartPlus(start, freqInfo(f).months), -1); }
-function ruleDay(anchor, day, offset){
-  if(!anchor || day==null || offset==null) return null;
-  const first = monthStartPlus(anchor, +offset);
-  const last = +monthRange(first.slice(0,7))[1].slice(8);
-  return first.slice(0,8)+String(Math.min(+day, last)).padStart(2,"0");
-}
-function periodLabel(start, f){
-  if(!start || !freqInfo(f).months) return "";
-  const [y,m] = start.split("-").map(Number);
-  const fyY = m>=4 ? y : y-1, fy = fyY+"-"+String((fyY+1)%100).padStart(2,"0");
-  const mon = d => MONTHS_SHORT[+d.slice(5,7)-1]+" "+d.slice(0,4);
-  const range = mon(start)+" – "+mon(periodEndOf(start, f));
-  switch(f){
-    case "monthly":     return mon(start);
-    case "quarterly":   return [1,4,7,10].includes(m) ? "Q"+(Math.floor(((m+8)%12)/3)+1)+" FY "+fy : range;
-    case "half_yearly": return m===4 ? "H1 FY "+fy : m===10 ? "H2 FY "+fy : range;
-    case "yearly":      return m===4 ? "FY "+fy : range;
+const daysBetween = (a,b) => Math.round((new Date(b+"T00:00:00Z")-new Date(a+"T00:00:00Z"))/864e5);
+/* Schedule dates in from..to (inclusive; null = open), sorted, at most limit.
+   s = { repeat, interval, start, until, count, extras, skipped }. */
+function scheduleDates(s, from, to, limit){
+  limit = limit || 500;
+  const skip = new Set(s.skipped||[]), out = new Set();
+  (s.extras||[]).forEach(d=>{ if((!from || d>=from) && (!to || d<=to)) out.add(d); });
+  if(s.repeat && s.repeat!=="none" && s.start){
+    let k = 0, found = 0;
+    const step = (s.repeat==="weekly" ? 7 : 1)*s.interval;
+    if((s.repeat==="daily" || s.repeat==="weekly") && from && from>s.start)
+      k = Math.max(0, Math.floor(daysBetween(s.start, from)/step)-1);
+    for(; k<200000; k++){
+      if(s.count!=null && k>=s.count) break;
+      const d = scheduleOccurrence(s.start, s.repeat, s.interval, k);
+      if(s.until && d>s.until) break;
+      if(to && d>to) break;
+      if(from && d<from) continue;
+      if(!skip.has(d)){ out.add(d); if(++found>=limit) break; }
+    }
   }
-  return "";
+  return [...out].sort().slice(0, limit);
 }
-/* The period that contains date d (for defaults): monthly = its month,
-   quarterly/half-yearly/yearly = aligned to the Indian FY (April). */
-function periodContaining(d, f){
-  const n = freqInfo(f).months; if(!n) return null;
-  const [y,m] = d.split("-").map(Number);
-  const fromApril = (m-4+12)%12;                       // months since 1 April
-  return monthStartPlus(y+"-"+String(m).padStart(2,"0")+"-01", -(fromApril % n));
+/* Is d one of the schedule's repeat dates (skipped or not)? */
+const scheduleRuleHas = (s, d) => !!s.repeat && s.repeat!=="none" && !!s.start &&
+  scheduleDates(Object.assign({}, s, { extras:[], skipped:[] }), d, d, 1).length>0;
+/* "Every 3 months from 20 Nov 2026, 12 times" */
+function scheduleSummary(s){
+  if(!s || !s.repeat || s.repeat==="none") return "";
+  const u = repeatInfo(s.repeat).unit;
+  return (s.interval>1 ? "Every "+s.interval+" "+u+"s" : repeatInfo(s.repeat).label)+
+    (s.start ? " from "+fmtDate(s.start) : "")+
+    (s.until ? ", until "+fmtDate(s.until) : s.count!=null ? ", "+s.count+" time"+(s.count===1?"":"s") : "");
 }
-/* Period + both due dates for a recurrence r = { frequency, start, statDay,
-   statOffset, intRule, intDay, intOffset, intDays } (start = 1st of a month). */
-function recurrenceDates(r){
-  const end = periodEndOf(r.start, r.frequency);
-  const stat = r.statDay!=null ? ruleDay(end, r.statDay, r.statOffset) : null;
-  const internal = r.intRule==="fixed" ? ruleDay(end, r.intDay, r.intOffset)
-                 : r.intRule==="statutory_offset" && stat && r.intDays!=null ? addDays(stat, +r.intDays) : null;
-  return { start:r.start, end, label:periodLabel(r.start, r.frequency), stat, internal };
+/* Schedule fields of a jobs row (054). Absent before 054 is applied: plain job. */
+function jobScheduleFields(j){
+  return { scheduleId:j.schedule_id||null, scheduleDate:j.schedule_date||null, previousJobId:j.previous_job_id||null };
 }
-function offsetPhrase(n, f){
-  n = +n;
-  if(n===0) return f==="monthly" ? "the same month" : "the period's last month";
-  return n===1 ? "the month after the period ends" : n+" months after the period ends";
+const isScheduled = j => !!j && !!j.scheduleId;
+/* The next scheduled date of a job's series on or after today and after this
+   job's own date (null = none left, or the schedule is not loaded). */
+function jobNextScheduled(j){
+  const s = isScheduled(j) && SCHEDULES[j.scheduleId]; if(!s) return null;
+  const after = j.scheduleDate && j.scheduleDate>=TODAY ? addDays(j.scheduleDate, 1) : TODAY;
+  return scheduleDates(s, after, null, 1)[0] || null;
 }
-function statRuleText(r){
-  return r.statDay==null ? "No statutory due date"
-    : "Day "+r.statDay+" of "+offsetPhrase(r.statOffset, r.frequency);
-}
-function intRuleText(r){
-  if(r.intRule==="fixed") return "Day "+r.intDay+" of "+offsetPhrase(r.intOffset, r.frequency);
-  if(r.intRule==="statutory_offset"){
-    const n = +r.intDays;
-    return n===0 ? "Same day as the statutory due date"
-      : Math.abs(n)+" day"+(Math.abs(n)===1?"":"s")+" "+(n<0?"before":"after")+" the statutory due date";
-  }
-  return "-";
-}
-/* A job code is one-time (unique) or recurring (unique per period) - never
-   both. Mirrors guard_job_recurrence() (048). Returns the clashing job or null. */
-/* Recurrence fields of a jobs row (048). Absent before 048 is applied: one-time. */
-function jobRecurrenceFields(j){
-  return {
-    frequency:j.frequency||"one_time", periodStart:j.period_start||null, periodEnd:j.period_end||null,
-    statDay:j.stat_due_day??null, statOffset:j.stat_due_month_offset??null,
-    intRule:j.internal_due_rule||null, intDay:j.internal_due_day??null, intOffset:j.internal_due_month_offset??null,
-    intDays:j.internal_due_offset_days??null, previousJobId:j.previous_job_id||null,
-    recurrenceStoppedAt:j.recurrence_stopped_at||null, recurrenceStopped:!!j.recurrence_stopped_at
-  };
-}
-function jobCodeClash(code, periodStart, exceptId){
+/* A job code belongs to one plain job or to one schedule (any number of
+   dates). Mirrors guard_job_schedule() (054). Returns the clashing job or null. */
+function jobCodeClash(code, scheduleId, exceptId){
   const c = code.trim().toUpperCase();
   return ALL_JOBS.find(j=>j.id!==exceptId && j.code.trim().toUpperCase()===c &&
-    (!j.periodStart || !periodStart || j.periodStart===periodStart)) || null;
+    !(scheduleId && j.scheduleId===scheduleId)) || null;
 }
-/* Job code as shown in pickers: recurring periods share a code, so add the period. */
-const jobPickLabel = j => j.code+(isRecurring(j) && j.period ? " · "+j.period : "");
+/* Job code as shown in pickers: scheduled jobs share a code, so add the date. */
+const jobPickLabel = j => j.code+(isScheduled(j) && j.period ? " · "+j.period : "");
 
 function dueTag(d){
   const n=daysTo(d);
@@ -1736,9 +1733,14 @@ function jobDueTag(j, date){
 const taskDueTag = t => t.status==="completed" ? '<span class="tag ok">Done</span>' : dueTag(t.due);
 
 const STATUS_LABEL = {
-  todo:"To do", in_progress:"In progress", blocked_on_client:"Waiting on client",
-  submitted_for_review:"For review", changes_requested:"Changes asked", completed:"Done",
-  open:"Open", under_review:"Under review", closed:"Closed"
+  todo:"To do", in_progress:"In progress", 
+  // blocked_on_client:"Waiting on client",
+  // submitted_for_review:"For review", 
+  changes_requested:"Changes asked", 
+  completed:"Done",
+  open:"Open", 
+  // under_review:"Under review", 
+  closed:"Closed"
 };
 
 /* ================  TIME: the parts that were wrong  ================= */
@@ -1992,6 +1994,18 @@ const entriesFor = (who, week=WEEK) => entriesForWeek(who, week);
 const bookedFor  = (who, week=WEEK) => sum(entriesFor(who,week).map(x=>+x.hours||0));
 const dateOf = en => en.date || addDays(en.week, en.day);
 const entriesOnDate = (who,date) => ENTRIES.filter(x=>x.who===who && dateOf(x)===date);
+/* Timesheets lock per date, never per week: a date is submitted (locked for
+   new time) once it has time with the approver or approved and nothing on it
+   was sent back - a queried date is open again for corrections. Other dates
+   of the same week stay open until they are submitted themselves. Mirrors
+   trg_timesheet_date_locked (055). */
+function dateSubmitted(who, date){
+  const rows = entriesOnDate(who, date);
+  return rows.some(x=>x.status==="pending"||x.status==="approved") && !rows.some(x=>x.status==="queried");
+}
+/* Dates of a week with time not yet submitted (draft or sent back). */
+const unsubmittedDates = (who, week=WEEK) =>
+  [...new Set(entriesFor(who,week).filter(r=>r.status==="draft"||r.status==="queried").map(dateOf))].sort();
 function weeksFor(who){
   return [...new Set(ENTRIES.filter(x=>x.who===who).map(x=>x.week))].sort().reverse();
 }
@@ -2815,7 +2829,8 @@ VIEWS.mytime = {
     const st = sheetStatus(me,TIMESHEET_WEEK);
 
     const weekDone = firstOpenDay(me,TIMESHEET_WEEK)===null;
-    const locked = st==="submitted" || (st==="approved" && weekDone);
+    // only the chosen date can be locked - never the rest of its week
+    const locked = dateSubmitted(me,TIMESHEET_DATE);
 
     let h = '<div class="card"><div class="card-head">'+
       '<h2>'+esc(person(me).name)+'</h2>'+
@@ -2833,20 +2848,26 @@ VIEWS.mytime = {
 
     /* submit controls */
     h += '<div style="display:flex;gap:8px;align-items:center;margin-top:16px;flex-wrap:wrap">';
-    if(st==="submitted"){
-      h += '<span class="tiny muted">Submitted and locked. '+
-           esc(person(person(me).reportsTo).name || "A partner")+' has it.</span>';
-    } else if(st==="approved" && weekDone){
-      h += '<span class="tiny muted">Fully approved. Nothing left to do.</span>';
-    } else if(st==="nil filed"){
+    const nothing = !entriesFor(me,TIMESHEET_WEEK).length;
+    const openDates = unsubmittedDates(me,TIMESHEET_WEEK);
+    const verb = CAN.selfCertify() ? "Submit and certify" : "Submit for approval";
+    if(nothing && st==="nil filed"){
       h += '<span class="tiny muted">Nil week recorded. Nothing to approve.</span>';
+    } else if(nothing){
+      h += '<button class="btn" onclick="submitSheet()">Submit nil timesheet</button>'+
+        '<span class="tiny muted">Nothing booked this week. A nil timesheet still goes on record.</span>';
+    } else if(!openDates.length){
+      h += '<span class="tiny muted">'+(st==="approved" && weekDone ? 'Fully approved. Nothing left to do.'
+        : 'Submitted days are locked'+(st==="submitted" ? ' - '+esc(person(person(me).reportsTo).name || "A partner")+' has them' : '')+
+          '. Days not submitted yet stay open - choose a date above to log time.')+'</span>';
     } else {
-      const nothing = !entriesFor(me,TIMESHEET_WEEK).length;
-      h += '<button class="btn" onclick="submitSheet()">'+
-        (nothing ? "Submit nil timesheet" :
-         CAN.selfCertify() ? "Submit and certify" : "Submit for approval")+'</button>';
-      if(nothing) h += '<span class="tiny muted">Nothing booked this week. A nil timesheet still goes on record.</span>';
-      else if(CAN.selfCertify()) h += '<span class="tiny muted">Partners certify their own - there is nobody above you.</span>';
+      // each date is submitted on its own; the rest of the week stays open
+      if(openDates.includes(TIMESHEET_DATE))
+        h += '<button class="btn" onclick="submitSheet(\''+TIMESHEET_DATE+'\')">'+verb+' · '+fmtShort(TIMESHEET_DATE)+'</button>';
+      if(openDates.length>1 || !openDates.includes(TIMESHEET_DATE))
+        h += '<button class="btn'+(openDates.includes(TIMESHEET_DATE)?' ghost':'')+'" onclick="submitSheet()">'+verb+' · all unsubmitted days ('+
+          openDates.map(fmtShort).join(", ")+')</button>';
+      if(CAN.selfCertify()) h += '<span class="tiny muted">Partners certify their own - there is nobody above you.</span>';
     }
     h += '</div></div>';
 
@@ -2901,7 +2922,7 @@ function quickHTML(locked, week=WEEK){
         '<input type="text" id="qNote" placeholder="Partner review - draft financials"'+disabled+'></label>'+
       '<button class="btn" onclick="quickAdd()"'+(locked?" disabled":"")+'>Add</button>'+
     '</div>'+
-    (locked?'<p class="tiny muted" style="margin-top:9px">This week is locked. Choose another date to open its week.</p>':
+    (locked?'<p class="tiny muted" style="margin-top:9px">'+fmtShort(TIMESHEET_DATE)+' is submitted and locked. Choose another date to log time - the other days of this week stay open.</p>':
       '<p class="tiny muted" style="margin-top:9px">Review time belongs on the job you reviewed. '+
       'Booked to FIRM/ADMIN it disappears from that job\'s cost - and yours are the expensive hours.</p>')+
     '</div>';
@@ -2921,7 +2942,7 @@ function quickHTML(locked, week=WEEK){
           '</div><div class="line-days">'+
           g.rows.map(r=>'<div class="line-day"><span class="d">'+weekdayDate(dateOf(r))+'</span>'+
             '<span class="h">'+hrs(r.hours)+'h</span>'+taskTag(r)+'<span>'+esc(r.note)+'</span>'+
-            (locked||r.status!=="draft"?"":'<button class="btn ghost sm" style="margin-left:auto" onclick="dropEntry(\''+r.id+'\')">×</button>')+
+            (r.status!=="draft"?"":'<button class="btn ghost sm" style="margin-left:auto" onclick="dropEntry(\''+r.id+'\')">×</button>')+
             '</div>').join("")+
           '</div>'+(g.query?'<p class="tiny" style="margin-top:7px;color:var(--red)">"'+esc(g.query)+'"</p>':"")+'</div>';
       }).join("")
@@ -4610,26 +4631,28 @@ function jobPartnerLineHTML(j){
       : '')+
     '</div>';
 }
-/* Period and both due dates on the job card; for a recurring job (048) also
-   its frequency, rules and the neighbouring periods of the same job code. */
+/* Period and both due dates on the job card; for a scheduled job (054) also
+   its repeat, the next scheduled date and the neighbouring jobs of the code. */
 function jobPeriodLineHTML(j){
   if(j.overhead) return "";
-  const rec = isRecurring(j);
-  if(!rec && !j.period && !j.statDue && !j.due) return "";
+  const sc = isScheduled(j);
+  if(!sc && !j.period && !j.statDue && !j.due) return "";
+  const s = sc ? SCHEDULES[j.scheduleId] : null;
   const prev = j.previousJobId ? ALL_JOBS.find(x=>x.id===j.previousJobId) : null;
-  const next = rec ? ALL_JOBS.find(x=>x.previousJobId===j.id) : null;
+  const next = sc ? ALL_JOBS.find(x=>x.previousJobId===j.id) : null;
+  const upcoming = sc && !next ? jobNextScheduled(j) : null;
   const bit = (k,v) => '<span><span class="muted">'+k+':</span> <strong>'+v+'</strong></span>';
-  const end = rec && j.periodStart ? (j.periodEnd || periodEndOf(j.periodStart, j.frequency)) : null;
   return '<div class="tiny" style="display:flex;gap:6px 14px;align-items:baseline;flex-wrap:wrap;margin:-2px 0 10px">'+
-    (rec ? '<span class="tag info" title="Statutory due: '+esc(statRuleText(j))+'. Internal due: '+esc(intRuleText(j))+'.">'+
-      freqInfo(j.frequency).label+'</span>' : '')+
-    (j.period ? bit("Period", esc(j.period)+(end ? ' <span class="muted" style="font-weight:400">('+fmtShort(j.periodStart)+' – '+fmtDate(end)+')</span>' : '')) : '')+
+    (sc ? '<span class="tag info"'+(s && s.repeat!=="none" ? ' title="'+esc(scheduleSummary(s))+'"' : '')+'>'+
+      esc(s && s.repeat!=="none" ? (s.interval>1 ? "Every "+s.interval+" "+repeatInfo(s.repeat).unit+"s" : repeatInfo(s.repeat).label) : "Scheduled")+'</span>' : '')+
+    (j.period && !sc ? bit("Period", esc(j.period)) : '')+
     bit("Statutory due", j.statDue ? fmtDate(j.statDue) : "-")+
     bit("Internal due", j.due ? fmtDate(j.due) : "-")+
-    (prev ? '<span class="muted">Previous period: '+esc(prev.period||"-")+' - '+esc(STATUS_LABEL[prev.status]||prev.status)+
+    (upcoming ? bit("Next scheduled due", fmtDate(upcoming)) : '')+
+    (prev ? '<span class="muted">Previous: '+esc(prev.period||"-")+' - '+esc(STATUS_LABEL[prev.status]||prev.status)+
       (prev.closedAt ? ' '+fmtDate(prev.closedAt.slice(0,10)) : '')+'</span>' : '')+
-    (next ? '<span class="muted">Next period: '+esc(next.period||"-")+'</span>' : '')+
-    (rec && !next && j.recurrenceStopped ? '<span class="tag">Last period</span>' : '')+
+    (next ? '<span class="muted">Next: '+esc(next.period||(next.due ? fmtDate(next.due) : "-"))+'</span>' : '')+
+    (sc && s && !next && !upcoming ? '<span class="tag">Last scheduled date</span>' : '')+
   '</div>';
 }
 function jobCardHTML(j){
@@ -4895,10 +4918,11 @@ function openStatJob(jid){
   modal(jobCardHTML(j)+'<div class="row"><button class="btn ghost" onclick="closeModal()">Close</button></div>', "wide");
 }
 
-/* Clients a statutory date can be attached to: the company's active clients
-   (plus the date's current client, so editing never silently drops it). */
+/* Clients a statutory date can be attached to: every active client of the
+   organization - clients are shared by all its companies (053) - plus the
+   date's current client, so editing never silently drops it. */
 function statClientOptions(companyId, current){
-  return CLIENTS.filter(c=>c.companyId===companyId && (c.active || c.id===current))
+  return CLIENTS.filter(c=>c.active || c.id===current)
     .sort((a,b)=>a.name.localeCompare(b.name));
 }
 function statClientOptionsHTML(companyId, current){
@@ -4956,7 +4980,7 @@ async function saveStatDate(id){
   const d = id ? STATUTORY_DATES.find(x=>x.id===id) : null;
   if(!title) return err("Enter the obligation.");
   if(!companyId || !companyOptions(d ? d.companyId : null).some(c=>c.id===companyId)) return err("Choose a company.");
-  if(clientId && !statClientOptions(companyId, d && d.clientId).some(c=>c.id===clientId)) return err("Choose a client of the selected company.");
+  if(clientId && !statClientOptions(companyId, d && d.clientId).some(c=>c.id===clientId)) return err("Choose an active client.");
   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)) return err("Choose the statutory due date.");
   if(!STAT_CATEGORIES.some(c=>c.id===categoryId)) return err("Choose a category.");
   // created_by defaults to the caller's profile; a client's date takes the
@@ -5101,6 +5125,7 @@ async function quickAdd(){
   if(!validISODate(date)) return toast("Choose a valid date");
   if(taskId && !TASKS.some(t=>t.id===taskId && t.job===jid)) return toast("That task does not belong to the selected job code");
   const week=mondayOfISO(date), day=weekdayIndex(date);
+  if(dateSubmitted(me,date)) return toast(fmtShort(date)+" is already submitted - choose a date that is not submitted yet");
   if(!h||h<=0) return toast("Enter the hours");
   if(!note) return toast("Say what you did - the approver reads this");
   const openDay = firstOpenDay(me,week);
@@ -5140,7 +5165,9 @@ async function dropEntry(id){
   ENTRIES = ENTRIES.filter(x=>x.id!==id); render();
 }
 
-async function submitSheet(){
+/* Submits one date (onlyDate) or every unsubmitted date of the week. Each
+   date is its own unit: submitting some never locks the others. */
+async function submitSheet(onlyDate){
   const rows=entriesFor(me,TIMESHEET_WEEK);
   // No weekly hours target: a week with nothing booked is recorded as a nil timesheet.
   if(!rows.length){
@@ -5153,10 +5180,11 @@ async function submitSheet(){
     toast("Nil timesheet recorded - nothing booked this week");
     return render();
   }
-  const missing = rows.filter(r=>!r.note.trim());
+  const toSubmit = rows.filter(r=>(r.status==="draft"||r.status==="queried") && (!onlyDate || dateOf(r)===onlyDate));
+  if(!toSubmit.length) return toast(onlyDate ? "Nothing to submit for "+fmtShort(onlyDate) : "Nothing left to submit this week");
+  const missing = toSubmit.filter(r=>!r.note.trim());
   if(missing.length) return toast(missing.length+" entr"+(missing.length===1?"y needs":"ies need")+" a narration");
 
-  const toSubmit = rows.filter(r=>r.status==="draft"||r.status==="queried");
   // Minimum hours per day (re-checked by trg_timesheet_day_minimum, 045).
   const short = daysBelowMinimum(me, toSubmit);
   if(short.length) return toast(short.map(x=>fmtShort(x.date)+": "+hrs(x.total)+"h of "+x.min+"h").join(" · ")+
@@ -5307,6 +5335,8 @@ async function doCloseJob(jid){
   if(error) return toast("Could not close the job - "+error.message);
   Object.assign(job(jid), { status:"closed", closingNote:note, closedAt });
   closeModal(); toast("Job closed - moved to Job closed"); render();
+  // a scheduled job code (054): closing raises the job for its next date
+  if(isScheduled(job(jid))) generateScheduledJobs();
 }
 async function reopenJob(jid){
   if(!CAN.reopenJob()) return toast("Assistant Manager and above can reopen a job");
@@ -6367,6 +6397,13 @@ const partnerName = id => {
   const q = person(id); return q.name!=="-" ? q.name : "";
 };
 /* The client's Relationship Partner when they are an active Partner, else null. */
+/* Company a new job code is raised under. Clients are shared by every company
+   of the organization (053), so the client's company is used only where the
+   user may raise jobs (Partners: any company); otherwise the user's own. */
+const newJobCompany = clientId => {
+  const c = clientOf(clientId).companyId;
+  return c && (managesAllCompanies() || c===HOME_COMPANY_ID) ? c : HOME_COMPANY_ID;
+};
 const defaultJobPartner = clientId => { const rp = clientOf(clientId).partner; return isActiveJobPartner(rp) ? rp : null; };
 const jobPartnerOptions = (selected, exclude) =>
   activeJobPartners().filter(p=>p.id!==exclude).map(p=>'<option value="'+p.id+'"'+(p.id===selected?" selected":"")+'>'+
@@ -6375,7 +6412,7 @@ const jobPartnerOptions = (selected, exclude) =>
 /* New job form: the Responsible Partner field for the chosen client. */
 function njPartnerFieldHTML(clientId){
   const def = defaultJobPartner(clientId);
-  const company = clientOf(clientId).companyId || HOME_COMPANY_ID;
+  const company = newJobCompany(clientId);
   // Without a default anyone who may raise the job has to name a partner.
   const locked = !!def && !CAN.setJobPartner(company);
   const rp = clientOf(clientId).partner;
@@ -6466,7 +6503,7 @@ function jpBack(saved){
       if(el.type==="checkbox") el.checked = v; else el.value = v;
       if(t) el.dataset.touched = t;
     });
-    njRecChanged(true);   // re-apply the restored frequency and rules (048)
+    njRepeatChanged(true);   // re-apply the restored repeat (054)
     return;
   }
   closeModal(); if(saved) render();
@@ -6482,11 +6519,11 @@ function suggestCode(){
   const cl = CLIENTS.find(c=>c.id===$("#njClient").value);
   const sv = $("#njService").value;
   const pd = $("#njPeriod").value || currentFY();
-  // A recurring job keeps one code for every period, so the period is not part of it.
-  const recurring = $("#njFreq") && freqInfo($("#njFreq").value).months>0;
-  const code = (cl?cl.code:"CLIENT")+"/"+sv+(recurring ? "" : "/"+pd);
+  // A repeating job keeps one code for every date, so the period is not part of it.
+  const series = njRepeats();
+  const code = (cl?cl.code:"CLIENT")+"/"+sv+(series ? "" : "/"+pd);
   $("#njCode").value = code;
-  if(!$("#njTitle").dataset.touched) $("#njTitle").value = (sv ? serviceName(sv) : "")+" "+pd;
+  if(!$("#njTitle").dataset.touched) $("#njTitle").value = ((sv ? serviceName(sv) : "")+(series ? "" : " "+pd)).trim();
 }
 
 /* New job code, or - with a job id - the same form pre-filled to edit that
@@ -6550,9 +6587,8 @@ function newJob(jid){
         '</div>' : '')+
     '</div></div>'+
     partnerField+
-    njRecurrenceHTML(j)+
     '<div class="grid g2" style="gap:10px">'+
-    '<label class="field"><span>Period / FY</span>'+
+    '<label class="field" id="njPeriodWrap"><span>Period / FY</span>'+
       '<input type="text" id="njPeriod" value="'+esc(j ? j.period : currentFY())+'"'+(j ? '' : ' oninput="suggestCode()"')+'></label>'+
     '<label class="field"><span>Job code</span><input type="text" id="njCode" value="'+esc(j ? j.code : '')+'"></label></div>'+
     '<label class="field"><span>Title</span>'+
@@ -6561,151 +6597,90 @@ function newJob(jid){
     '<label class="field"><span>Budgeted hours *</span>'+
       '<input type="number" id="njBudget" min="0.5" step="0.5" placeholder="e.g. 8" required value="'+(j ? j.budget : '')+'"></label>'+
     '<label class="field"><span>Statutory due</span>'+
-      '<input type="date" id="njDueStat" value="'+(j ? (j.statDue||'') : addDays(TODAY,60))+'"></label>'+
+      '<input type="date" id="njDueStat" value="'+(j ? (j.statDue||'') : addDays(TODAY,60))+'" onchange="njRepeatChanged()"></label>'+
     '<label class="field"><span>Internal due</span>'+
-      '<input type="date" id="njDue" value="'+(j ? (j.due||'') : addDays(TODAY,30))+'"></label></div>'+
-    '<p class="tiny muted" id="njDueHint" style="margin:-6px 0 11px" hidden>Period and due dates are calculated from the frequency and the rules below.</p>'+
-    njRecurrenceRulesHTML(j)+
+      '<input type="date" id="njDue" value="'+(j ? (j.due||'') : addDays(TODAY,30))+'" onchange="njRepeatChanged()"></label></div>'+
+    njRepeatHTML(j)+
     companyField+
     // Raising a job code creates only the job - tasks are added with "Add a task".
     '<div class="row"><button class="btn ghost" onclick="closeModal()">Cancel</button>'+
     (j ? '<button class="btn" id="njSave" onclick="saveJob(\''+j.id+'\')">Save Changes</button>'
        : '<button class="btn" id="njSave" onclick="saveJob()">Raise job code</button>')+'</div>');
-  njRecChanged(true);
+  njRepeatChanged(true);
   if(!j) suggestCode();
 }
 
-/* ---- Job code form: frequency + due-date rules (048) ---- */
-const NJ_REC_DEFAULTS = { statDay:20, statOffset:1, intRule:"statutory_offset", intDays:-5, intDay:15, intOffset:1 };
-function njOffsetOptions(sel, f){
-  let h=""; for(let n=0;n<=12;n++) h+='<option value="'+n+'"'+(+sel===n?" selected":"")+'>'+esc(offsetPhrase(n, f))+'</option>';
-  return h;
-}
-/* Frequency + the month the period starts, shown under the partner. */
-function njRecurrenceHTML(j){
-  const f = j ? (j.frequency||"one_time") : "one_time";
-  const start = (j && j.periodStart ? j.periodStart : periodContaining(TODAY, "monthly")).slice(0,7);
+/* ---- Job code form: Repeat (054) ------------------------------------------------
+   One dropdown under the due dates. A repeating job code gets one job per
+   date: the internal due date moves by the chosen step and the statutory due
+   date keeps the same number of days from it. The database raises the job for
+   the next date once the previous job is closed or its due date has passed. */
+const REPEAT_CHOICES = [
+  ["none","Does not repeat"], ["daily:1","Daily"], ["weekly:1","Weekly"], ["monthly:1","Monthly"],
+  ["monthly:3","Every 3 months"], ["monthly:6","Every 6 months"], ["yearly:1","Yearly"]
+];
+function njRepeatHTML(j){
+  const s = j && j.scheduleId ? SCHEDULES[j.scheduleId] : null;
+  let cur = s && s.repeat!=="none" ? s.repeat+":"+s.interval : "none";
+  if(cur==="monthly:12") cur = "yearly:1";
+  const choices = REPEAT_CHOICES.slice();
+  if(!choices.some(c=>c[0]===cur)) choices.push([cur, "Every "+s.interval+" "+repeatInfo(s.repeat).unit+"s"]);
+  const end = s ? (s.until ? "until" : s.count!=null ? "count" : "never") : "never";
+  const opt = (v,l,c) => '<option value="'+v+'"'+(v===c?' selected':'')+'>'+l+'</option>';
   return '<div class="grid g2" style="gap:10px">'+
-    '<label class="field"><span>Frequency</span><select id="njFreq" onchange="njRecChanged()">'+
-      FREQUENCIES.map(x=>'<option value="'+x.code+'"'+(x.code===f?" selected":"")+'>'+x.label+'</option>').join("")+'</select></label>'+
-    '<label class="field" id="njPStartWrap" hidden><span>Period starts</span>'+
-      '<input type="month" id="njPStart" value="'+start+'"'+(j && j.periodStart ? ' data-touched="1"' : '')+
-      ' onchange="this.dataset.touched=1;njRecChanged()"></label></div>';
+    '<label class="field"><span>Repeat</span><select id="njRepeat" onchange="njRepeatChanged()"'+(j && j.scheduleId && !s ? ' disabled' : '')+'>'+
+      choices.map(c=>opt(c[0], c[1], cur)).join("")+'</select></label>'+
+    '<div class="field" id="njEndsWrap" hidden><span>Ends</span><div class="rep-end">'+
+      '<select id="njEnds" onchange="njRepeatChanged()">'+opt("never","Never",end)+opt("count","After",end)+opt("until","On",end)+'</select>'+
+      '<span id="njCountWrap" class="rep-end"><input type="number" id="njCount" min="1" max="999" step="1" value="'+(s && s.count!=null ? s.count : 12)+'" oninput="njRepeatChanged()"> times</span>'+
+      '<input type="date" id="njUntil" value="'+(s && s.until ? s.until : '')+'" onchange="njRepeatChanged()">'+
+    '</div></div></div>'+
+    (j && j.scheduleId && !s ? '<p class="tiny" style="color:var(--red);margin:-6px 0 11px">The repeat of this job code could not be loaded - refresh the app to change it.</p>' : '')+
+    '<p class="tiny muted" id="njRepeatHint" style="margin:-6px 0 11px" hidden></p>';
 }
-/* Due-date rules, a preview of the coming periods and what happens at period end. */
-function njRecurrenceRulesHTML(j){
-  const r = j && isRecurring(j) ? j : NJ_REC_DEFAULTS;
-  const f = j && isRecurring(j) ? j.frequency : "monthly";
-  const statFixed = r.statDay!=null;
-  const intMode = r.intRule==="fixed" ? "fixed" : (+r.intDays<0 ? "before" : "after");
-  return '<div class="rec-box" id="njRecBox" hidden>'+
-    '<div class="eyebrow">How this job recurs</div>'+
-    '<div class="rec-rule"><span class="rec-k">Statutory due</span><div class="rec-inline">'+
-      '<select id="njStatRule" onchange="njRecChanged()">'+
-        '<option value="fixed"'+(statFixed?" selected":"")+'>Fixed day</option>'+
-        '<option value="none"'+(statFixed?"":" selected")+'>No statutory due date</option></select>'+
-      '<span id="njStatFixed" class="rec-inline">day <input type="number" id="njStatDay" min="1" max="31" step="1" value="'+(r.statDay??NJ_REC_DEFAULTS.statDay)+'" oninput="njRecChanged()">'+
-        ' of <select id="njStatOff" onchange="njRecChanged()">'+njOffsetOptions(r.statOffset??NJ_REC_DEFAULTS.statOffset, f)+'</select></span>'+
-    '</div></div>'+
-    '<div class="rec-rule"><span class="rec-k">Internal due</span><div class="rec-inline">'+
-      '<select id="njIntRule" onchange="njRecChanged()">'+
-        '<option value="before"'+(intMode==="before"?" selected":"")+'>Days before statutory due</option>'+
-        '<option value="after"'+(intMode==="after"?" selected":"")+'>Days after statutory due</option>'+
-        '<option value="fixed"'+(intMode==="fixed"?" selected":"")+'>Fixed day</option></select>'+
-      '<span id="njIntRel" class="rec-inline"><input type="number" id="njIntDays" min="0" max="366" step="1" value="'+Math.abs(r.intDays??NJ_REC_DEFAULTS.intDays)+'" oninput="njRecChanged()"> days</span>'+
-      '<span id="njIntFixed" class="rec-inline">day <input type="number" id="njIntDay" min="1" max="31" step="1" value="'+(r.intDay??NJ_REC_DEFAULTS.intDay)+'" oninput="njRecChanged()">'+
-        ' of <select id="njIntOff" onchange="njRecChanged()">'+njOffsetOptions(r.intOffset??NJ_REC_DEFAULTS.intOffset, f)+'</select></span>'+
-    '</div></div>'+
-    '<div id="njRecPreview"></div>'+
-    '<p class="tiny muted" id="njRecExplain" style="margin-top:10px"></p>'+
-    (j && isRecurring(j)
-      ? '<label class="tiny" style="display:flex;gap:6px;align-items:center;margin-top:8px">'+
-          '<input type="checkbox" id="njRecStop"'+(j.recurrenceStopped?" checked":"")+' onchange="njRecChanged()"> '+
-          'Last period - do not raise the next one</label>'
-      : '')+
-  '</div>';
-}
-/* The recurrence as entered in the form, or { error }. */
-function njReadRecurrence(){
-  const f = $("#njFreq") ? $("#njFreq").value : "one_time";
-  if(!freqInfo(f).months) return { frequency:"one_time" };
-  const ym = $("#njPStart").value;
-  if(!/^\d{4}-\d{2}$/.test(ym)) return { error:"Choose the month the period starts" };
-  const int = v => /^\d+$/.test(String(v).trim()) ? +v : NaN;
-  const r = { frequency:f, start:ym+"-01", statDay:null, statOffset:null, intRule:null, intDay:null, intOffset:null, intDays:null };
-  if($("#njStatRule").value==="fixed"){
-    r.statDay = int($("#njStatDay").value); r.statOffset = +$("#njStatOff").value;
-    if(!(r.statDay>=1 && r.statDay<=31)) return { error:"Statutory due day must be a whole number from 1 to 31" };
+const njRepeats = () => !!$("#njRepeat") && $("#njRepeat").value!=="none";
+/* The repeat as entered, or { error }. due = the internal due date. */
+function njReadRepeat(due){
+  const sel = $("#njRepeat");
+  if(!sel || sel.value==="none") return { repeat:"none", interval:1, until:null, count:null };
+  const [repeat, n] = sel.value.split(":");
+  const r = { repeat, interval:+n||1, until:null, count:null };
+  const end = $("#njEnds").value;
+  if(end==="count"){
+    r.count = parseInt($("#njCount").value, 10);
+    if(!(r.count>=1 && r.count<=999)) return { error:"Repeat: enter how many times, from 1 to 999" };
+  } else if(end==="until"){
+    r.until = $("#njUntil").value;
+    if(!r.until) return { error:"Repeat: choose the date it ends on" };
+    if(due && r.until<due) return { error:"Repeat: the end date must be on or after the internal due date" };
   }
-  const mode = $("#njIntRule").value;
-  if(mode==="fixed"){
-    r.intRule = "fixed"; r.intDay = int($("#njIntDay").value); r.intOffset = +$("#njIntOff").value;
-    if(!(r.intDay>=1 && r.intDay<=31)) return { error:"Internal due day must be a whole number from 1 to 31" };
-  } else {
-    if(r.statDay==null) return { error:"Internal due is counted from the statutory due date - set a statutory due rule or use a fixed day" };
-    const n = int($("#njIntDays").value);
-    if(!(n>=0 && n<=366)) return { error:"Internal due days must be a whole number from 0 to 366" };
-    r.intRule = "statutory_offset"; r.intDays = mode==="before" ? -n : n;
-  }
-  r.stop = !!($("#njRecStop") && $("#njRecStop").checked);
   return r;
 }
-/* Re-applies the frequency and rules to the form: shows/hides the rule box,
-   locks Period / FY and both due dates to the calculated values, and redraws
-   the preview. initial = first draw (do not re-suggest the code). */
-function njRecChanged(initial){
-  const freqSel = $("#njFreq"); if(!freqSel) return;
-  const f = freqSel.value, rec = freqInfo(f).months>0;
-  const editing = !!$("#njEditing");
-  $("#njPStartWrap").hidden = !rec; $("#njRecBox").hidden = !rec; $("#njDueHint").hidden = !rec;
-  const period = $("#njPeriod"), stat = $("#njDueStat"), due = $("#njDue");
-  [period, stat, due].forEach(el=>{ el.readOnly = rec; });
-  if(!rec){
-    // back to one-time: restore what was typed before recurring took over
-    [period, stat, due].forEach(el=>{ if(el.dataset.manual!=null){ el.value = el.dataset.manual; delete el.dataset.manual; } });
-    if(!editing && !initial) suggestCode();
-    return;
+/* Shows the Ends field and the coming due dates; keeps the code suggestion in step. */
+function njRepeatChanged(initial){
+  const sel = $("#njRepeat"); if(!sel) return;
+  const on = sel.value!=="none";
+  $("#njEndsWrap").hidden = !on;
+  const end = $("#njEnds").value;
+  $("#njCountWrap").hidden = end!=="count"; $("#njUntil").hidden = end!=="until";
+  $("#njPeriodWrap").hidden = on;
+  const hint = $("#njRepeatHint");
+  const due = $("#njDue").value, stat = $("#njDueStat").value;
+  const r = njReadRepeat(due);
+  if(!on){ hint.hidden = true; }
+  else if(r.error){ hint.hidden = false; hint.innerHTML = '<span style="color:var(--red)">'+esc(r.error)+'</span>'; }
+  else if(!due){ hint.hidden = false; hint.textContent = "Set the internal due date - the repeat counts from it."; }
+  else {
+    const dates = scheduleDates({ repeat:r.repeat, interval:r.interval, start:due, until:r.until, count:r.count, extras:[], skipped:[] }, null, null, 4);
+    const gap = stat ? daysBetween(due, stat) : null;
+    hint.hidden = false;
+    hint.innerHTML = 'Next due dates: '+dates.map(d=>'<strong>'+fmtDate(d)+'</strong>').join(" · ")+
+      (r.count==null && !r.until || dates.length>=4 ? ' …' : '')+
+      (gap!=null ? ' (statutory due '+(gap===0 ? 'the same day' : Math.abs(gap)+' day'+(Math.abs(gap)===1?'':'s')+' '+(gap>0?'after':'before'))+')' : '')+
+      '.<br>Each date gets its own job with this code, client, budget, partner and team - the next one is raised '+
+      'when the previous job is closed or its due date passes.';
   }
-  [period, stat, due].forEach(el=>{ if(el.dataset.manual==null) el.dataset.manual = el.value; });
-  // A new job starts on the current period of the chosen frequency unless a month was picked.
-  const ps = $("#njPStart");
-  if(!ps.dataset.touched) ps.value = periodContaining(TODAY, f).slice(0,7);
-  // Offset wording depends on the frequency ("the same month" for monthly).
-  ["njStatOff","njIntOff"].forEach(id=>{ const s=$("#"+id), v=s.value; s.innerHTML = njOffsetOptions(v, f); });
-  const statFixed = $("#njStatRule").value==="fixed";
-  const intSel = $("#njIntRule");
-  [...intSel.options].forEach(o=>{ if(o.value!=="fixed") o.disabled = !statFixed; });
-  if(!statFixed && intSel.value!=="fixed") intSel.value = "fixed";
-  $("#njStatFixed").hidden = !statFixed;
-  $("#njIntRel").hidden = intSel.value==="fixed"; $("#njIntFixed").hidden = intSel.value!=="fixed";
-
-  const r = njReadRecurrence();
-  const prev = $("#njRecPreview"), explain = $("#njRecExplain");
-  if(r.error){
-    prev.innerHTML = '<p class="tiny" style="color:var(--red);margin-top:10px">'+esc(r.error)+'</p>';
-    explain.textContent = ""; return;
-  }
-  const step = freqInfo(f).months;
-  const rows = [0,1,2].map(i=>recurrenceDates(Object.assign({}, r, { start:monthStartPlus(r.start, i*step) })));
-  const cur = rows[0];
-  period.value = cur.label; stat.value = cur.stat||""; due.value = cur.internal||"";
-  prev.innerHTML = '<table class="rec-prev"><thead><tr><th>Period</th><th>Dates</th><th>Statutory due</th><th>Internal due</th></tr></thead><tbody>'+
-    rows.map((x,i)=>'<tr'+(i?'':' class="now"')+'><td>'+esc(x.label)+(i?'':' <span class="tag info">this job</span>')+'</td>'+
-      '<td class="tiny muted">'+fmtShort(x.start)+' – '+fmtDate(x.end)+'</td>'+
-      '<td>'+(x.stat ? fmtDate(x.stat) : '<span class="muted">-</span>')+'</td>'+
-      '<td>'+(x.internal ? fmtDate(x.internal) : '<span class="muted">-</span>')+'</td></tr>').join("")+
-    '</tbody></table>';
-  explain.innerHTML =
-    '<strong>Statutory due:</strong> '+esc(statRuleText(r))+'. '+
-    '<strong>Internal due:</strong> '+esc(intRuleText(r))+'. '+
-    'Dates follow calendar months, not a fixed number of days; when a month has no such day (e.g. the 31st in February), '+
-    'its last day is used. '+
-    (r.stop
-      ? 'This is the last period: when it ends, no next job is raised.'
-      : 'The day after this period ends ('+fmtDate(cur.end)+'), this job is closed automatically and the '+esc(rows[1].label)+
-        ' job is raised with the same job code, client, service, title, budget, responsible partner and team. '+
-        'Closed periods keep their dates, tasks and time under Job closed. Each job code is raised once per period.');
-  if(!editing && !initial) suggestCode();
+  if(!initial && !$("#njEditing")) suggestCode();
 }
 
 async function saveJob(editId){
@@ -6716,15 +6691,14 @@ async function saveJob(editId){
   const due=$("#njDue").value||TODAY, statDue=$("#njDueStat").value||null;
   const clientId=$("#njClient").value;
   const service=$("#njService").value, period=$("#njPeriod").value.trim()||null;
-  const rec=njReadRecurrence();
+  const rep=njReadRepeat(due);
   if(!service) return toast("Choose a service");
   if(!code) return toast("A job code is required");
-  if(rec.error) return toast(rec.error);
-  // Same code: allowed only for another period of a recurring job (048).
-  const clash=jobCodeClash(code, rec.start||null, editId);
-  if(clash) return toast(clash.periodStart && rec.start
-    ? "Job code "+code+" already exists for "+(clash.period||periodLabel(clash.periodStart, clash.frequency))
-    : clash.periodStart ? "Job code "+code+" is used by a recurring job - use another code, or make this job recurring"
+  if(rep.error) return toast(rep.error);
+  // Same code: allowed only for another date of the same repeating job code (054).
+  const clash=jobCodeClash(code, editId ? job(editId).scheduleId : null, editId);
+  if(clash) return toast(isScheduled(clash)
+    ? "Job code "+code+" is used by a repeating job code - use another code"
     : "That job code already exists");
   if(!title) return toast("Give the job a title");
   if(!budgetRaw) return toast("Enter the budgeted hours");
@@ -6736,72 +6710,115 @@ async function saveJob(editId){
     if(!partnerId) return toast("Choose the responsible partner for this job");
     if(!isActiveJobPartner(partnerId)) return toast("The responsible partner must be an active Partner");
     const def = defaultJobPartner(clientId);
-    if(def && partnerId!==def && !CAN.setJobPartner(clientOf(clientId).companyId||HOME_COMPANY_ID))
+    if(def && partnerId!==def && !CAN.setJobPartner(newJobCompany(clientId)))
       return toast("Only a Partner, or a Manager for their own company, can choose a different responsible partner");
   }
   // One save at a time: a second click while the first is in flight is ignored.
   const btn=$("#njSave"); if(btn.disabled) return; btn.disabled=true;
-  if(editId){ await updateJob(editId, { code, title, budget, due, statDue, clientId, service, period, rec }); btn.disabled=false; return; }
+  const sched = schedulePayload(rep, due, statDue);
+  if(editId){ await updateJob(editId, { code, title, budget, due, statDue, clientId, service, period, rep, sched }); btn.disabled=false; return; }
 
+  // A repeating job code: its schedule first, then the job for the first date.
+  let scheduleId = null;
+  if(rep.repeat!=="none"){
+    const { data:sr, error:se } = await supabase.from("job_schedules")
+      .insert({ organization_id:ORG_ID, created_by:me, ...sched }).select().single();
+    if(se){ btn.disabled=false; return toast("Could not save the repeat - "+se.message); }
+    scheduleId = sr.id; SCHEDULES[sr.id] = scheduleFromRow(sr);
+  }
   const { data, error } = await supabase.from("jobs").insert({
     organization_id:ORG_ID, client_id:clientId, job_code:code, title, status:"open",
-    service_category:service, period_fy:period,
+    service_category:service, period_fy:scheduleId ? fmtDate(due) : period,
     budget_hours:budget, internal_due_date:due, statutory_due_date:statDue,
-    // A job belongs to its client's company (the DB trigger, 028, derives the
-    // same when company_id is omitted).
-    is_overhead:false, opened_by:me, opened_on:TODAY, company_id:clientOf(clientId).companyId||HOME_COMPANY_ID,
+    // The client's company where the user may raise jobs there, else their own (newJobCompany).
+    is_overhead:false, opened_by:me, opened_on:TODAY, company_id:newJobCompany(clientId),
     responsible_partner_id:partnerId,
-    ...(rec.frequency!=="one_time" ? recurrencePayload(rec, null) : {})
+    ...(scheduleId ? { schedule_id:scheduleId, schedule_date:due } : {})
   }).select().single();
+  if(error){
+    if(scheduleId){ await supabase.from("job_schedules").delete().eq("id", scheduleId); delete SCHEDULES[scheduleId]; }
+    btn.disabled=false;
+    return toast("Could not raise the job code - "+jobSaveError(error));
+  }
   btn.disabled=false;
-  if(error) return toast("Could not raise the job code - "+jobSaveError(error));
-  // The database re-derives the period and due dates from the rules (048); keep its values.
   JOBS.push({ id:data.id, code, title, client:clientId, status:"open",
     budget, due:data.internal_due_date, statDue:data.statutory_due_date, overhead:false, openedBy:me, openedOn:TODAY, companyId:data.company_id,
-    service, period:data.period_fy||"", partner:data.responsible_partner_id||null, ...jobRecurrenceFields(data) });
+    service, period:data.period_fy||"", partner:data.responsible_partner_id||null, ...jobScheduleFields(data) });
   closeModal(); toast("Raised "+code); go("jobs");
+  if(scheduleId) generateScheduledJobs();
 }
 
-/* 23505 from guard_job_recurrence (048) already names the code and period;
-   a bare unique-index message does not. */
-const jobSaveError = e => e.code==="23505" && /^duplicate key/i.test(e.message||"")
-  ? "that job code already exists for this period" : e.message;
-
-/* jobs columns for the form's recurrence (048). The database works out
-   period_end and both due dates from these; one-time clears them all. */
-function recurrencePayload(r, existing){
-  if(r.frequency==="one_time") return { frequency:"one_time", recurrence_stopped_at:null };
+/* job_schedules columns for the form's repeat (054): it counts from this
+   job's internal due date; the statutory date keeps its distance from it.
+   "Does not repeat" on a repeating code = no more dates after this job. */
+function schedulePayload(rep, due, statDue){
+  const on = rep.repeat!=="none";
   return {
-    frequency:r.frequency, period_start:r.start,
-    stat_due_day:r.statDay, stat_due_month_offset:r.statOffset,
-    internal_due_rule:r.intRule, internal_due_day:r.intDay, internal_due_month_offset:r.intOffset,
-    internal_due_offset_days:r.intDays,
-    recurrence_stopped_at: r.stop ? ((existing && existing.recurrenceStoppedAt) || new Date().toISOString()) : null
+    repeat:rep.repeat, repeat_interval:on ? rep.interval : 1, repeat_start:on ? due : null,
+    repeat_until:on ? rep.until : null, repeat_count:on ? rep.count : null,
+    extra_dates:on ? [] : [due], skipped_dates:[],
+    statutory_offset_days:statDue ? daysBetween(due, statDue) : null
   };
 }
 
-/* Edit: UPDATE the existing jobs row - only the form's own fields. Status,
-   closing details, opener, tasks, time, costs and approvals are untouched,
-   so a closed job stays closed. */
+/* 23505 from guard_job_schedule (054) already names the code; a bare
+   unique-index message does not. */
+const jobSaveError = e => e.code==="23505" && /^duplicate key/i.test(e.message||"")
+  ? "that job code already exists" : e.message;
+
+/* Raises the jobs of any repeat dates now due (054); reloads when one was
+   raised. Quiet: the same runs hourly and on every app load. */
+async function generateScheduledJobs(){
+  const { data, error } = await supabase.rpc("generate_scheduled_jobs");
+  if(error){ console.warn("[DATA] scheduled job generation skipped -", error.message); return; }
+  if(data>0){ toast(data+" scheduled job"+(data===1?"":"s")+" raised"); await reloadAppData(); }
+}
+
+/* Edit: UPDATE the existing jobs row - only the form's own fields - and the
+   job code's repeat. Status, closing details, opener, tasks, time, costs and
+   approvals are untouched, so a closed job stays closed. */
 async function updateJob(jid, f){
   const j = job(jid);
   const payload = {
-    job_code:f.code, title:f.title, client_id:f.clientId, service_category:f.service, period_fy:f.period,
-    budget_hours:f.budget, internal_due_date:f.due, statutory_due_date:f.statDue,
-    // recurrence columns are sent only when the job is or was recurring, so a
-    // one-time edit still works before 048 is applied
-    ...(isRecurring(j) || f.rec.frequency!=="one_time" ? recurrencePayload(f.rec, j) : {})
+    job_code:f.code, title:f.title, client_id:f.clientId, service_category:f.service,
+    budget_hours:f.budget, internal_due_date:f.due, statutory_due_date:f.statDue
   };
+  let scheduleId = j.scheduleId, newSchedule = null;
+  if(scheduleId && SCHEDULES[scheduleId]){
+    // the repeat now counts from this job's dates
+    const { data:sr, error:se } = await supabase.from("job_schedules").update(f.sched).eq("id", scheduleId).select().maybeSingle();
+    if(se) return toast("Could not save the repeat - "+se.message);
+    if(!sr) return toast("Could not save the repeat - you do not have permission to edit it");
+    SCHEDULES[sr.id] = scheduleFromRow(sr);
+  } else if(!scheduleId && f.rep.repeat!=="none"){
+    const { data:sr, error:se } = await supabase.from("job_schedules")
+      .insert({ organization_id:ORG_ID, created_by:me, ...f.sched }).select().single();
+    if(se) return toast("Could not save the repeat - "+se.message);
+    scheduleId = newSchedule = sr.id; SCHEDULES[sr.id] = scheduleFromRow(sr);
+    payload.schedule_id = scheduleId;
+  }
+  if(scheduleId){
+    payload.schedule_date = f.due;
+    // the date label follows the due date unless it was named by hand
+    const own = j.scheduleDate || j.due;
+    payload.period_fy = newSchedule ? (j.period || fmtDate(f.due))
+      : (!j.period || (own && j.period===fmtDate(own))) ? fmtDate(f.due) : j.period;
+  } else {
+    payload.period_fy = f.period;
+  }
   // Company: partners only (the database enforces the same, 028); sent only when changed.
   const companyId = $("#njCompany") ? $("#njCompany").value : j.companyId;
   if(companyId && companyId!==j.companyId) payload.company_id = companyId;
   const { data, error } = await supabase.from("jobs").update(payload).eq("id", jid).select().maybeSingle();
-  if(error) return toast("Could not save the job code - "+jobSaveError(error));
-  if(!data) return toast("Could not save the job code - you do not have permission to edit it");
+  if(error || !data){
+    if(newSchedule){ await supabase.from("job_schedules").delete().eq("id", newSchedule); delete SCHEDULES[newSchedule]; }
+    return toast("Could not save the job code - "+(error ? jobSaveError(error) : "you do not have permission to edit it"));
+  }
   Object.assign(j, { code:data.job_code, title:data.title, client:data.client_id, service:data.service_category||"",
     period:data.period_fy||"", budget:+data.budget_hours||0, due:data.internal_due_date,
-    statDue:data.statutory_due_date, companyId:data.company_id, ...jobRecurrenceFields(data) });
+    statDue:data.statutory_due_date, companyId:data.company_id, ...jobScheduleFields(data) });
   closeModal(); toast("Saved changes to "+j.code); render();
+  if(scheduleId) generateScheduledJobs();
 }
 
 function newTask(jid){
